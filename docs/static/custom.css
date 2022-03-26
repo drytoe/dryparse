@@ -1,0 +1,30 @@
+/* Option directive */
+.rst-content dl.option dt {
+    font-size: 80% !important;
+    padding: 0 1px 0 10px !important;
+    border-top: none !important;
+    background:#fff !important;
+    color: #000 !important;
+    border:1px solid #e1e4e5 !important;
+}
+
+.rst-content dl.option dt .headerlink {
+    transform: scale(0.8) !important;
+    margin: 1px -1px 0px -6px !important;
+}
+
+/* Code element for listing command options */
+code.no-decor {
+    border: none !important;
+    background: none !important;
+    margin: -30px !important;
+}
+
+/*
+ * Render function/class/etc signatures in a monospace font
+*/
+.sig-object, dt {
+    font-family: monospace;
+    font-size-adjust: 0.4;
+}
+dt { padding-left: 8px; }

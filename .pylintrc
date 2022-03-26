@@ -1,0 +1,17 @@
+[BASIC]
+variable-rgx=[a-z0-9_]{1,30}$
+
+[FORMAT]
+max-line-length=79
+
+[MISCELLANEOUS]
+notes=FIXME
+
+[MESSAGES CONTROL]
+
+        # Just so it doesn't treat globals as constants
+disable=invalid-name,
+        # This is just annoying
+        global-statement,
+        # We use generic Exceptions to generate CLI error messages
+        broad-except
