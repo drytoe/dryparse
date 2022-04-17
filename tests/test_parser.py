@@ -1,8 +1,7 @@
 import textwrap
 
-import pytest
-
 from dryparse import Command, parse
+from dryparse.help import Help
 from dryparse.objects import Option, RootCommand
 from dryparse.parser import parse_arg
 
@@ -42,11 +41,11 @@ class TestParser:
 
     def test_parse_command_help(self, capfd):
         cmd = Command("test")
-        cmd.random = Option(
-            "-r", "--random", signature="--random, -r", hint="[--random]"
-        )
-        cmd.output = Option("-o", "--output", type=str, help="output file")
-        cmd.editor = Option(long="--config", type=str, metavar="FILE")
+        random = Option("-r", "--random")
+        cmd.random = random
+        Help(random).signature = "--random, -r"
+        cmd.output = Option("-o", "--output", type=str, desc="output file")
+        cmd.editor = Option(long="--config", type=str, argname="FILE")
         args = ["test", "-h", "--random", "positional"]
 
         parse(cmd, args)
@@ -54,33 +53,34 @@ class TestParser:
         print(cap.out)
         assert cap.out == textwrap.dedent(
             """\
-            Usage: test [-h] [--random] [-o OUTPUT] [--config FILE]
+            Usage: test [-h] [-r] [-o OUTPUT] [--config FILE]
 
             Options:
-              -h, --help                  print help message and exit
+              -h, --help                      print help message and exit
               --random, -r
-              -o OUTPUT, --output OUTPUT  output file
+              -o OUTPUT, --output OUTPUT      output file
               --config FILE
             """
         )
         assert not cap.err
 
 
-class TestHolistic:
-
+class TestFakeDocker:
     @classmethod
     def setup_class(cls):
-        cls.cmd = RootCommand("docker", desc="A self-sufficient runtime for containers", version="0.1.0")
-        cls.cmd.debug = Option("-D", "--debug", help="Enable debug mode")
-        cls.cmd.run = run = Command("run", desc="Run a command in a new container")
-        run.interactive = Option("-i", "--interactive", help="Keep STDIN open even if not attached")
-        run.tty = Option("-t", "--tty", help="TODO")
+        cls.cmd = RootCommand(
+            "docker",
+            desc="A self-sufficient runtime for containers",
+            version="0.1.0",
+        )
+        cls.cmd.debug = Option("-D", "--debug", desc="Enable debug mode")
+        cls.cmd.run = run = Command(
+            "run", desc="Run a command in a new container"
+        )
+        run.interactive = Option(
+            "-i", "--interactive", desc="Keep STDIN open even if not attached"
+        )
+        run.tty = Option("-t", "--tty", desc="TODO")
 
     def test_help(self, capfd):
-        parse(self.cmd, [
-            "/usr/bin/docker",
-            "-D",
-            "run",
-            "TODO"
-        ])
-
+        parse(self.cmd, ["/usr/bin/docker", "-D", "run", "TODO"])

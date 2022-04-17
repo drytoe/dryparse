@@ -3,6 +3,8 @@ API
 
 .. toctree::
 
+   api/help.rst
+
 ``Option``
 ----------
 
@@ -15,6 +17,12 @@ API
 .. autoclass:: dryparse.objects.Command
    :members:
    :special-members: __call__
+
+``Group``
+---------
+
+.. autoclass:: dryparse.objects.Group
+   :members:
 
 ``parser``
 ----------

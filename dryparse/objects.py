@@ -1,12 +1,19 @@
 import inspect
-from types import SimpleNamespace
+import weakref
 from typing import List
+
+from dryparse.util import _NoInit, reassignable_property
 
 
 class DryParseType:
     """Exists so all dryparse objects can share the same parent."""
 
-    pass
+
+class Group(DryParseType):
+    """A group of commands or options."""
+
+    def __init__(self, name: str):
+        self.name = name
 
 
 class Option(DryParseType):
@@ -15,36 +22,38 @@ class Option(DryParseType):
     ----------
     short: str
         Regex pattern that the short version of this option should match
-        against. Usually this is a hyphen followed by a single letter.
+        against. Usually this is a hyphen followed by a single letter
+        (e.g. `-s`).
     long: str
         Regex pattern that the short version of this option should match
         against. Usually this is two hyphens followed by multiple letters.
+        (e.g. `--long`)
     """
 
     def __init__(
         self,
         short: str = "",
         long: str = "",
-        hint: str = None,
-        signature: str = None,
-        metavar: str = None,
+        argname: str = None,
         default=None,
         type: type = bool,
-        help="",
+        desc: str = None,
     ):
         if not (short or long):
-            raise ValueError()
+            raise ValueError("An option must have short or long text")
         self.short = short
         self.long = long
-        self.help = help
-        self.metavar = metavar
-        self._hint = hint
-        self._signature = signature
         self.type = type
         if default:
             self.value = default
         else:
             self.value = None
+        if not (argname is None and desc is None):
+            from .help import Help
+            if argname is not None:
+                Help(self).argname = argname
+            if desc is not None:
+                Help(self).desc = desc
 
     def __setattr__(self, key, value):
         if key == "build":
@@ -59,9 +68,7 @@ class Option(DryParseType):
         """
         Each time this option is specified on the command line, this method is
         called. The positional arguments in the function signature determine
-        what formats are acceptable for the option. Unless custom `hint` or
-        `signature` handlers are given, the positional argument names are used
-        to generate the help message.
+        what formats are acceptable for the option.
 
         The build function can be assigned by `option.build = <function>`.
 
@@ -83,56 +90,6 @@ class Option(DryParseType):
         """
         self.value = True
 
-    @property
-    def hint(self):
-        if self._hint:
-            return self._hint
-        else:
-            return (
-                "["
-                + " ".join(
-                    filter(
-                        None,
-                        (
-                            next(filter(None, (self.short, self.long)), None),
-                            (self.metavar or self.long.upper()[2:])
-                            if self.type != bool
-                            else None,
-                        ),
-                    )
-                )
-                + "]"
-            )
-
-    @property
-    def signature(self):
-        if self._signature:
-            return self._signature
-
-        long = " ".join(
-            filter(
-                None,
-                (
-                    self.long,
-                    (self.metavar or self.long.upper()[2:])
-                    if self.type != bool
-                    else None,
-                ),
-            )
-        ) if self.long else None
-        short = " ".join(
-            filter(
-                None,
-                (
-                    self.short,
-                    self.metavar or self.long.upper()[2:]
-                    if self.type != bool
-                    else None,
-                ),
-            )
-        ) if self.short else None
-        return ", ".join(filter(None, (short, long)))
-
 
 class Argument(DryParseType):
     def __init__(self, type: type = str):
@@ -143,14 +100,19 @@ class Argument(DryParseType):
 class Command(DryParseType):
     """
     A CLI command.
+
+    All attributes are either options, subcommands or positional arguments.
     """
 
-    def __init__(self, name, regex=None, desc=""):
+    def __init__(self, name, regex=None, desc: str = None):
         meta = Meta(self)
         meta.name = name
         meta.regex = regex or name
-        meta.desc = desc
-        self.help = Option("-h", "--help", help="print help message and exit")
+        self.help = Option("-h", "--help", desc="print help message and exit")
+
+        if desc is not None:
+            from .help import Help
+            Help(self).desc = desc
 
     def __call__(self):
         """
@@ -158,9 +120,9 @@ class Command(DryParseType):
         options like help and version, and handle subcommands.
         """
         if self.help:
-            from .util import get_help
+            from .help import Help
 
-            print(get_help(self))
+            print(Help(self).text)
         else:
             Meta(self).call()
 
@@ -223,25 +185,12 @@ class Command(DryParseType):
         super().__delattr__(name)
 
 
-class __NoInit(type):
-    def __call__(cls, *args, **kwargs):
-        return cls.__new__(cls, *args, **kwargs)
-
-
-class Meta(DryParseType, metaclass=__NoInit):
+class Meta(DryParseType, metaclass=_NoInit):
     """
     Meta wrapper for :class:`Command` that can be used to access special
     attributes of :class:`Command`.
     """
-
-    __slots__ = [
-        "options",
-        "subcommands",
-        "arguments",
-        "name",
-        "regex",
-        "desc",
-    ]
+    _command_to_meta_map = weakref.WeakKeyDictionary()
 
     def __init__(self, command: Command):
         self.options: List[Option] = []
@@ -254,11 +203,11 @@ class Meta(DryParseType, metaclass=__NoInit):
 
     def __new__(cls, command: Command):
         try:
-            return command._dryparse_command_meta
-        except AttributeError:
-            meta = command._dryparse_command_meta = super().__new__(cls)
-            meta.__init__(command)
-            return meta
+            return cls._command_to_meta_map[command]
+        except KeyError:
+            help = cls._command_to_meta_map[command] = super().__new__(cls)
+            help.__init__(command)
+            return help
 
     def __setattr__(self, key, value):
         if key == "call":
@@ -275,12 +224,14 @@ class RootCommand(Command):
     def __init__(self, name, regex="", desc="", version=""):
         super().__init__(name, regex=regex, desc=desc)
         self.version = Option(
-            "-v", "--version", help="print program version and exit"
+            "-v", "--version", desc="print program version and exit"
         )
         Meta(self).version = version
 
-    def __call__(self, *args, version=False, help=False, **kwargs):
+    def __call__(self, *args, version=False, desc=False, **kwargs):
         if version and not help:
             print(f"{Meta(self).regex} version {Meta(self).version}")
         else:
-            super().__call__(*args, version=version, help=help, **kwargs)
+            super().__call__(
+                *args, **self.__dict__, version=version, desc=desc, **kwargs
+            )
