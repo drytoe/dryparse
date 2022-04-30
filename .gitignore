@@ -9,3 +9,6 @@ _build
 __pycache__
 tem.egg-info
 .mypy_cache/
+
+# Misc
+/.idea

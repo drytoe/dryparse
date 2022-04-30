@@ -1,3 +1,5 @@
+"""Object model of a command line program."""
+
 import inspect
 from collections.abc import Sequence
 from types import EllipsisType
@@ -124,7 +126,9 @@ class Command(DryParseType):
     """
     A CLI command.
 
-    All attributes are either options, subcommands or positional arguments.
+    You can assign arbitrary attributes dynamically. Only attributes of types
+    :class:`Option`, :class:`Command`, :class:`Group` and others from
+    :mod:`dryparse.objects` have special meaning.
     """
 
     def __init__(self, name, regex=None, desc: str = None):
@@ -143,7 +147,7 @@ class Command(DryParseType):
         Execute the command. Unless overridden, this will process special
         options like help and version, and handle subcommands.
         """
-        if help:
+        if hasattr(self, "help") and help:
             from .help import Help
 
             print(Help(self).text)
@@ -188,20 +192,28 @@ class Command(DryParseType):
 
 
 class RootCommand(Command):
-    """Command that corresponds to the program itself."""
+    """
+    Command that corresponds to the program itself.
 
-    def __init__(self, name, regex="", desc="", version=""):
+    Parameters
+    ----------
+    version: str
+        Version of the program that is printed when the `--version` option is
+        given.
+    """
+
+    def __init__(self, name, regex=None, desc="", version="0.0.0"):
         super().__init__(name, regex=regex, desc=desc)
         self.version = Option(
             "-v", "--version", desc="print program version and exit"
         )
         Meta(self).version = version
 
-    def __call__(self, *args, version=False, desc=False, **kwargs):
-        if version and not help:
+    def __call__(self, *args, version=False, **kwargs):
+        if hasattr(self, "version") and version and "help" not in kwargs:
             print(f"{Meta(self).regex} version {Meta(self).version}")
         else:
-            super().__call__(*args, version=version, desc=desc, **kwargs)
+            super().__call__(*args, version=version, **kwargs)
 
 
 class Meta(DryParseType, metaclass=_NoInit):

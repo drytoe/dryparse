@@ -8,10 +8,76 @@ conventions. Sometimes you want to extend your CLI with custom features. This is
 where the object model comes in.
 
 Each concept in a commandline program is represented by an object in the
-:data:`dryparse.objects` module. In that vein, each command is represented by an
-instance of :class:`dryparse.objects.Command`, each option by a
-:class:`dryparse.objects.Option`.
+:data:`dryparse.objects` module. Thus, each command is represented by an
+instance of :class:`~dryparse.objects.Command`, each option by an
+:class:`~dryparse.objects.Option`, etc.
 
-.. doctest::
+The fundamentals
+----------------
 
-   >>> git = Command("git")
+The simplest way to create a command is:
+
+.. autolink-preface:: from dryparse.objects import *
+.. code:: python
+
+   git = Command("git")
+
+Adding options is super easy:
+
+.. code:: python
+
+   git.option = Option("-o", "--option")
+
+.. note::
+
+   The ``git.option`` attribute didn't exist before. We created it dynamically by assigning a value to it.
+
+By default, options have a type of ``bool``. This means that when the option is
+specified on the command line it will have a value of ``True``, and ``False``
+otherwise.
+
+Let's create an option of type ``int``:
+
+.. code:: python
+
+   git.retries = Option("-r", "--retries", type=int)
+
+This option takes an argument when specified via the command line. The argument
+is automatically converted to the type we specified (in this case ``int``)
+
+.. note::
+
+   All options except for ``bool`` and some :ref:`special types<dryparse.types>` take CLI arguments, and those arguments are
+   automatically converted to the specified type.
+
+Note that commands include a `--help` option by default, via a ``help``
+attribute that is just like any other attribute. You can delete it:
+
+.. code:: python
+
+   del git.help
+
+Adding a subcommand
+-------------------
+
+Adding a subcommand is just as easy as adding an option:
+
+.. code:: python
+
+   git.commit = Command("commit")
+   git.add = Command("add")
+
+Root command
+------------
+
+CLI programs usually include a `--version` option in their root command. While
+you can add this option yourself, it's more convenient to use
+:class:`~dryparse.objects.RootCommand`:
+
+.. code:: python
+
+   git = RootCommand("git", version="0.1.0")
+
+Customizing help output
+-----------------------
+

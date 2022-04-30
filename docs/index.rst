@@ -5,7 +5,7 @@ Welcome to dryparse's documentation!
    :maxdepth: 2
    :hidden:
 
-   api.rst
+   api/index.rst
    objects.rst
 
 Dryparse attempts to minimize the abstraction between a command invocation and a

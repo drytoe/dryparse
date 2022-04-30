@@ -63,6 +63,11 @@ github_username = "veracioux"
 github_repository = "dryparse"
 source_link_target = "GitHub"
 
+# ┏━━━━━━━━━━━━━━━┓
+# ┃ Code autolink ┃
+# ┗━━━━━━━━━━━━━━━┛
+codeautolink_global_preface = "from dryparse.objects import *"
+
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 # ┃ Specific steps for ReadTheDocs ┃
 # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛

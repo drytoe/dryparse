@@ -1,7 +1,10 @@
-API
-===
+``dryparse.objects``
+====================
+
+.. automodule:: dryparse.objects
 
 .. toctree::
+
 
 ``Option``
 ----------
@@ -15,6 +18,12 @@ API
 .. autoclass:: dryparse.objects.Command
    :members:
    :special-members: __call__
+
+``RootCommand``
+---------------
+
+.. autoclass:: dryparse.objects.RootCommand
+   :members:
 
 ``Group``
 ---------
