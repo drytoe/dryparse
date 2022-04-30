@@ -1,8 +1,10 @@
 import inspect
-import weakref
-from typing import List
+from collections.abc import Sequence
+from types import EllipsisType
+from typing import List, Type, Union, Callable
+from weakref import WeakKeyDictionary
 
-from dryparse.util import _NoInit, reassignable_property
+from dryparse.util import _NoInit, reassignable_method
 
 
 class DryParseType:
@@ -50,6 +52,7 @@ class Option(DryParseType):
             self.value = None
         if not (argname is None and desc is None):
             from .help import Help
+
             if argname is not None:
                 Help(self).argname = argname
             if desc is not None:
@@ -76,8 +79,8 @@ class Option(DryParseType):
         ----------
         option
             The exact way the option was specified. This is useful when the
-            option text is specified as a regex, or when you want to know if the
-            option was specified using its short or long format.
+            option text is specified as a regex, or when you want to know if
+            the option was specified using its short or long format.
 
         Examples
         --------
@@ -91,10 +94,30 @@ class Option(DryParseType):
         self.value = True
 
 
-class Argument(DryParseType):
-    def __init__(self, type: type = str):
-        self.type = type
+class Arguments(DryParseType):
+    """
+    Specification for positional arguments of a command.
+    """
+
+    __slots__ = ["types", "value", "defaults"]
+
+    def __init__(
+        self,
+        types: Union[type, Sequence[Union[type, EllipsisType]]] = str,
+        defaults: Union[type, Sequence[type]] = None,
+    ):
+        if (
+            defaults
+            and not isinstance(defaults, types)
+            and len(types) != len(defaults)
+        ):
+            pass
+        self.types = types
         self.value = None
+        self.defaults = defaults
+
+    def validate(self):
+        pass
 
 
 class Command(DryParseType):
@@ -112,14 +135,15 @@ class Command(DryParseType):
 
         if desc is not None:
             from .help import Help
+
             Help(self).desc = desc
 
-    def __call__(self):
+    def __call__(self, *args, help=False, **kwargs):
         """
         Execute the command. Unless overridden, this will process special
         options like help and version, and handle subcommands.
         """
-        if self.help:
+        if help:
             from .help import Help
 
             print(Help(self).text)
@@ -143,17 +167,6 @@ class Command(DryParseType):
         elif isinstance(value, Command):
             super().__setattr__(name, value)
             Meta(self).subcommands.append(value)
-        elif isinstance(value, Argument):
-            super().__setattr__(name, value)
-            Meta(self).arguments.append(value)
-        elif (
-            isinstance(value, list)
-            and value
-            and all([isinstance(item, Argument) for item in value])
-        ):
-            # ``value`` is a list of Arguments
-            super().__setattr__(name, value)
-            Meta(self).arguments += value
         else:
             try:
                 attr = super().__getattribute__(name)
@@ -171,51 +184,7 @@ class Command(DryParseType):
             Meta(self).options.remove(value)
         elif isinstance(value, Command):
             Meta(self).subcommands.remove(value)
-        elif isinstance(value, Argument):
-            Meta(self).arguments.remove(value)
-        elif (
-            isinstance(value, list)
-            and value
-            and all([isinstance(item, Argument) for item in value])
-        ):
-            # ``value`` is a list of Arguments
-            Meta(self).arguments[:] = [
-                arg for arg in Meta(self).arguments if arg not in value
-            ]
         super().__delattr__(name)
-
-
-class Meta(DryParseType, metaclass=_NoInit):
-    """
-    Meta wrapper for :class:`Command` that can be used to access special
-    attributes of :class:`Command`.
-    """
-    _command_to_meta_map = weakref.WeakKeyDictionary()
-
-    def __init__(self, command: Command):
-        self.options: List[Option] = []
-        self.subcommands: List[Command] = []
-        self.arguments: List[Argument] = []
-        self.name = ""
-        self.regex = ""
-        self.desc = ""
-        _ = command  # prevents some warnings
-
-    def __new__(cls, command: Command):
-        try:
-            return cls._command_to_meta_map[command]
-        except KeyError:
-            help = cls._command_to_meta_map[command] = super().__new__(cls)
-            help.__init__(command)
-            return help
-
-    def __setattr__(self, key, value):
-        if key == "call":
-            super().__setattr__(key, value.__get__)
-        super().__setattr__(key, value)
-
-    def call(self, *args, **kwargs):
-        pass
 
 
 class RootCommand(Command):
@@ -232,6 +201,44 @@ class RootCommand(Command):
         if version and not help:
             print(f"{Meta(self).regex} version {Meta(self).version}")
         else:
-            super().__call__(
-                *args, **self.__dict__, version=version, desc=desc, **kwargs
-            )
+            super().__call__(*args, version=version, desc=desc, **kwargs)
+
+
+class Meta(DryParseType, metaclass=_NoInit):
+    """
+    Meta wrapper for :class:`Command` that can be used to access special
+    attributes of :class:`Command`.
+
+    Attributes
+    ----------
+    called: bool
+        Indicates whether this command was called.
+    """
+
+    _command_to_meta_map: WeakKeyDictionary[
+        Command, "Meta"
+    ] = WeakKeyDictionary()
+
+    def __init__(self, command: Command):
+        self.options: List[Option] = []
+        self.command = command
+        self.subcommands: List[Command] = []
+        self.arguments = None
+        self.name = ""
+        self.regex = ""
+        self.called = False
+        _ = command  # prevents some warnings
+
+    def __new__(cls, command: Command):
+        try:
+            return cls._command_to_meta_map[command]
+        except KeyError:
+            help = cls._command_to_meta_map[command] = super().__new__(cls)
+            help.__init__(command)
+            return help
+
+    def call(self, *args, **kwargs):
+        pass
+
+    def callback(self, func: Callable):
+        self.call = func

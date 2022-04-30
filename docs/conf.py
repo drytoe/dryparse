@@ -13,9 +13,9 @@ copyright = "2021, Haris Gušić"
 author = "Haris Gušić"
 
 sys.path.insert(0, os.path.dirname(__file__) + "/..")
-import tem
+import dryparse
 
-release = tem.__version__
+release = dryparse.__version__
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━┓
 # ┃ General configuration ┃

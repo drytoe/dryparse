@@ -1,8 +1,7 @@
 import textwrap
 import weakref
 from io import StringIO
-from itertools import chain
-from typing import Iterable, Optional, Union, overload, List
+from typing import Iterable, List, Optional, Union, overload
 
 from dryparse.objects import Command, DryParseType, Group, Meta, Option
 from dryparse.util import _NoInit, reassignable_property
@@ -37,6 +36,7 @@ class HelpMessage(DryParseType, metaclass=_HelpMetaclass):
 
     You can customize every individual part or subpart of it, or its entirety.
     """
+
     _object_to_help_map = weakref.WeakKeyDictionary()
 
     def __str__(self):
@@ -122,7 +122,9 @@ class CommandHelp(HelpMessage, metaclass=_HelpMetaclass):
     @reassignable_property
     def text(self):
         """The entire help text."""
-        return self.section_separator.join((sec.text for sec in self.sections if sec.active))
+        return self.section_separator.join(
+            (sec.text for sec in self.sections if sec.active)
+        )
 
 
 class OptionHelp(HelpMessage, metaclass=_HelpMetaclass):
@@ -222,7 +224,6 @@ class OptionHelp(HelpMessage, metaclass=_HelpMetaclass):
 
 
 class GroupHelp(HelpMessage, metaclass=_HelpMetaclass):
-
     def __init__(self, group: AnyGroup):
         self.group = group
 
@@ -407,6 +408,7 @@ class CommandDescription:
         Brief description. Describes this command when it appears as a
         subcommand in another command's help text. Falls back to ``long``.
     """
+
     __slots__ = ["long", "brief"]
 
     def __init__(self, long, brief=None):
@@ -475,7 +477,9 @@ class _CommandHelpSectionList(HelpSectionList):
         @reassignable_property
         def content(self):
             meta = Meta(self.command)
-            return "\n".join(tuple(Help(cmd).listing for cmd in meta.subcommands))
+            return "\n".join(
+                tuple(Help(cmd).listing for cmd in meta.subcommands)
+            )
 
         @reassignable_property
         def active(self):

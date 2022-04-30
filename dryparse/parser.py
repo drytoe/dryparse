@@ -12,7 +12,11 @@ from .objects import Command, Meta, Option
 
 
 def parse(command: Command, args: List[str] = None):
-    """Parse ``args`` into ``command``."""
+    """
+    Parse ``args`` into ``command``.
+
+    If unspecified, ``args`` will fall back to ``sys.argv``.
+    """
     if args is None:
         args = sys.argv
     with Context() as context:

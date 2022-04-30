@@ -1,4 +1,5 @@
 import ast
+import inspect
 import re
 import weakref
 from typing import Any, Callable
@@ -40,7 +41,7 @@ class reassignable_property:
     def __init__(self, getter: Callable[[Any], Any]):
         self.getter = getter
         # Maps each instance to an overridden getter for this property. If an
-        # instance is missing from this dict, the default value
+        # instance is missing from this dict, the default value is used.
         self._instance_overrides: weakref.WeakKeyDictionary[
             Any, Callable[[Any], Any]
         ] = weakref.WeakKeyDictionary()

@@ -6,6 +6,7 @@ Welcome to dryparse's documentation!
    :hidden:
 
    api.rst
+   objects.rst
 
 Dryparse attempts to minimize the abstraction between a command invocation and a
 python function call. For example:

@@ -5,7 +5,7 @@
     border-top: none !important;
     background:#fff !important;
     color: #000 !important;
-    border:1px solid #e1e4e5 !important;
+    border: 1px solid #e1e4e5 !important;
 }
 
 .rst-content dl.option dt .headerlink {
@@ -20,11 +20,48 @@ code.no-decor {
     margin: -30px !important;
 }
 
-/*
- * Render function/class/etc signatures in a monospace font
-*/
+/* Render function/class/etc signatures in a monospace font */
 .sig-object, dt {
     font-family: monospace;
     font-size-adjust: 0.4;
 }
 dt { padding-left: 8px; }
+
+/* Make signature objects fill whole space */
+dt.py.sig-object.sig {
+    min-width: 100% !important;
+}
+dl.py.property {
+    min-width: 100% !important;
+}
+
+/* Color code references in blue */
+
+a.reference > code.xref > span.pre {
+    color: #2980b9 !important;
+}
+
+a:visited.reference > code.xref > span.pre {
+    color: #9b59b6 !important;
+}
+
+/* Tweak layout of "Parameters" section */
+dl.field-list.simple {
+    display: block !important;
+}
+dt.field-odd {
+    padding-left: 0 !important;
+    font-family: inherit;
+    font-style: normal;
+    font-weight: 400;
+    font-size: 20px !important;
+}
+dt.field-odd::after {
+    content: "" !important;
+}
+
+/* Draw type hints in class parameter descriptions as code objects */
+/* TODO */
+a.reference > em {
+    font-family: monospace;
+}
