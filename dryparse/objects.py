@@ -1,10 +1,10 @@
 import inspect
 from collections.abc import Sequence
 from types import EllipsisType
-from typing import List, Type, Union, Callable
+from typing import List, Union, Callable
 from weakref import WeakKeyDictionary
 
-from dryparse.util import _NoInit, reassignable_method
+from dryparse.util import _NoInit
 
 
 class DryParseType:
