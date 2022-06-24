@@ -30,3 +30,9 @@
 
 .. autoclass:: dryparse.objects.Group
    :members:
+
+``Arguments``
+-------------
+
+.. autoclass:: dryparse.objects.Arguments
+   :members:

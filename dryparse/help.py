@@ -90,7 +90,7 @@ class CommandHelp(HelpMessage, metaclass=_HelpMetaclass):
         return Meta(self.command).name
 
     @reassignable_property
-    def desc(self) -> Union["CommandDescription"]:
+    def desc(self) -> "CommandDescription":
         """
         Command description.
 
@@ -332,6 +332,9 @@ class HelpSection(DryParseType, metaclass=_HelpMetaclass):
         indent = " " * self.indent
         return self.headline + "\n" + textwrap.indent(self.content, indent)
 
+    def str(self):
+        return self.text
+
     def __repr__(self):
         cls = self.__class__
         return f"<{cls.__module__}.{cls.__qualname__}[{repr(self.name)}] at {hex(id(self))}>"
@@ -442,6 +445,9 @@ class _CommandHelpSectionList(HelpSectionList):
         def text(self):
             return Help(self.command).desc.long
 
+        def str(self):
+            return self.text
+
         def __repr__(self):
             return object.__repr__(self)
 
@@ -463,6 +469,9 @@ class _CommandHelpSectionList(HelpSectionList):
                 end="",
             )
             return out.getvalue()
+
+        def __str__(self):
+            return self.text
 
         def __repr__(self):
             return object.__repr__(self)

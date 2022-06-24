@@ -16,6 +16,7 @@ class OptionType(DryParseType):
     value: Any
         The option argument converted to an arbitrary type.
     """
+
     takes_argument = True
 
     def __init__(self, value: str):
@@ -24,6 +25,7 @@ class OptionType(DryParseType):
 
 class Counter(OptionType):
     """A counter that increments each time an option is specified."""
+
     takes_argument = False
 
     def __init__(self):

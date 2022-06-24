@@ -1,6 +1,6 @@
 import re
 import sys
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Union
 
 from . import util
 from .context import Context
@@ -42,7 +42,7 @@ def parse(command: Command, args: List[str] = None):
                 elif option.type == bool:
                     option.value = True
                 else:
-                    # The next argument ought should be the option value
+                    # The next argument ought to be the option value
                     waiting_for_option_value = True
                     option_str = arg
             elif isinstance(cmd := token, Command):
@@ -57,12 +57,15 @@ def parse(command: Command, args: List[str] = None):
     command()
 
 
-def parse_arg(command: Command, arg: str) -> Tuple[Option, Any]:
+def parse_arg(
+    command: Command, arg: str
+) -> Union[Tuple[Optional[Option], Optional[Any]], Command]:
     r"""
-    Parse ``arg` using the scheme from ``command``.
+    Parse ``arg`` using the scheme from ``command``.
 
     The argument can be an option (or option + value), a positional argument or
-    a subcommand. All the usual ways of specifying a CLI option are supported:
+    a subcommand. For options, all the usual ways of specifying a CLI option
+    are supported:
 
     - Long version: `--long`/`--long=\<value\>` for bool/non-bool options
     - Short version: `-s`/`-s\<value\>` for bool/non-bool options
@@ -96,8 +99,7 @@ def parse_arg(command: Command, arg: str) -> Tuple[Option, Any]:
                 return opt, value
 
     for cmd in Meta(command).subcommands:
-        regex = "^" + cmd._regex + "$"
-        if re.match(regex, arg):
+        if re.fullmatch(cmd.regex, arg):
             return cmd
 
     return None, None

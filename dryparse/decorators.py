@@ -11,6 +11,13 @@ def command(func: Callable[[str], Any]):
     Take a callable and turn it into a :class:`Command` object. The
     function's type hints are used to determine the type.
     """
-    cmd = Command(func.__name__, desc=parse(func.__doc__).short_description)
+    doc = parse(func.__doc__)
+    cmd = Command(func.__name__, desc=doc.short_description)
     positional_args = []
     print(inspect.signature(func))
+
+    return cmd
+
+
+def subcommand(func: Callable[[Command], Any]):
+    pass

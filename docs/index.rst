@@ -5,21 +5,55 @@ Welcome to dryparse's documentation!
    :maxdepth: 2
    :hidden:
 
-   api/index.rst
+   getting_started.rst
    objects.rst
+   api/index.rst
 
-Dryparse attempts to minimize the abstraction between a command invocation and a
-python function call. For example:
+In a nutshell, dryparse is a CLI parser that makes it easy to turn regular
+functions and objects into command line commands and options. It works out of
+the box, with default behaviors that follow established practices. In addition,
+it provides excellent customizability and an object model that gives you the
+power to do anything you want with it.
 
-.. code-block:: shell
+As an appetizer, let's try to recreate the ubiquitous `cp` command:
 
-   git --help
-
-is most elegantly represented in python as a function call:
+.. autolink-preface:: import dryparse
 
 .. code-block:: python
 
-   git(help=True)
+   @dryparse.command
+   def cp(
+      *files, link=False, force=False, target_directory: str = None
+   ):
+      """
+      Copy files and directories
+      """
+      ... # Logic goes here
+
+Do this in your program's entrypoint:
+
+.. code-block:: python
+
+   dryparse.parse(cp, sys.argv)
+
+When someone runs this in the shell:
+
+.. code-block:: shell
+
+   cp --link -r --target-directory "/tmp/" source/ b.txt
+
+this will run in the python world:
+
+.. code-block:: python
+
+   cp("source/", "b.txt", link=True, recursive=True, target_directory="/tmp/")
+
+This works out of the box too (help is automatically generated from the function
+docstring):
+
+.. code-block:: shell
+
+   cp --help
 
 A more holistic example:
 

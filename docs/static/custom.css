@@ -65,3 +65,11 @@ dt.field-odd::after {
 a.reference > em {
     font-family: monospace;
 }
+
+/* Code autolink extension */
+.sphinx-codeautolink-a {
+    color: #2980b9 !important;
+}
+.sphinx-codeautolink-a:visited {
+    color: #9b59b6 !important;
+}

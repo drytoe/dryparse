@@ -45,7 +45,7 @@ class TestParser:
         cmd.random = random
         Help(random).signature = "--random, -r"
         cmd.output = Option("-o", "--output", type=str, desc="output file")
-        cmd.editor = Option(long="--config", type=str, argname="FILE")
+        cmd.config = Option(long="--config", type=str, argname="FILE")
         args = ["test", "-h", "--random", "positional"]
 
         parse(cmd, args)
