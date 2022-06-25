@@ -1,15 +1,18 @@
+import copy
 import textwrap
 import weakref
 from io import StringIO
-from typing import Iterable, List, Optional, Union, overload
+from typing import Any, Iterable, List, Optional, Union, overload
 
 from dryparse.objects import Command, DryParseType, Group, Meta, Option
 from dryparse.util import _NoInit, reassignable_property
 
 AnyGroup = Union[str, Group]
+_HelpableObject = Union[Command, Option, Group]
+_ConcreteHelp = Union["CommandHelp", "OptionHelp", "GroupHelp"]
 
 
-class _HelpMetaclass(type):
+class _HelpMetaclass(_NoInit):
     _override_class = None
 
     @property
@@ -30,23 +33,57 @@ class _HelpMetaclass(type):
     #  constructed instead of an instance of the given class.
 
 
-class HelpMessage(DryParseType, metaclass=_HelpMetaclass):
+class Help(DryParseType, metaclass=_HelpMetaclass):
     """
-    An abstract hierarchical representation of a help message.
+    Hierarchical representation of a help message. You can customize every
+    individual part or subpart of it, or its entirety.
 
-    You can customize every individual part or subpart of it, or its entirety.
+    Constructing a ``Help`` object will return a specialized object depending
+    on the type of the wrapped object ``obj``. This will be one of:
+    :class:`OptionHelp`, :class:`CommandHelp`, :class:`GroupHelp`.
+
+    Parameters
+    ----------
+    obj: Command | Option | Group
+        Object for which to construct help.
     """
 
     _object_to_help_map = weakref.WeakKeyDictionary()
 
-    def __str__(self):
-        return self.text
+    def __init__(self, obj: _HelpableObject):
+        _ = obj  # prevents 'unused' warning
+        super().__init__()
 
-    def __new__(cls, obj):
+    @overload
+    def __new__(cls, obj: Command) -> "CommandHelp":
+        ...
+
+    @overload
+    def __new__(cls, obj: Option) -> "OptionHelp":
+        ...
+
+    @overload
+    def __new__(cls, obj: Group) -> "GroupHelp":
+        ...
+
+    def __new__(cls, obj: _HelpableObject) -> _ConcreteHelp:
+        if isinstance(obj, Command):
+            class_ = CommandHelp
+        elif isinstance(obj, Option):
+            class_ = OptionHelp
+        elif isinstance(obj, Group):
+            class_ = GroupHelp
+        else:
+            raise TypeError("obj has invalid type")
+
+        if class_.override_class:
+            class_ = class_.override_class
+
         try:
-            return HelpMessage._object_to_help_map[obj]
+            retval: Any = cls._object_to_help_map[obj]
+            return retval
         except KeyError:
-            help = HelpMessage._object_to_help_map[obj] = super().__new__(cls)
+            help = cls._object_to_help_map[obj] = super().__new__(class_)
             help.__init__(obj)
             return help
 
@@ -54,13 +91,21 @@ class HelpMessage(DryParseType, metaclass=_HelpMetaclass):
     def text(self):
         raise NotImplementedError
 
+    def __str__(self):
+        return self.text
 
-class CommandHelp(HelpMessage, metaclass=_HelpMetaclass):
+    def _copy_to(self, obj: _HelpableObject):
+        """Make ``command``'s help message identical to this one."""
+        new = self.__class__._object_to_help_map[obj] = copy.copy(self)
+        return new
+
+
+class CommandHelp(Help, metaclass=_HelpMetaclass):
     """
     Object that represents a command's help message organized as a hierarchy.
     """
 
-    __slots__ = ["command", "_sections"]
+    __slots__ = ("command", "_sections")
 
     def __init__(self, command: Command):
         self.command = command
@@ -82,8 +127,8 @@ class CommandHelp(HelpMessage, metaclass=_HelpMetaclass):
     @reassignable_property
     def signature(self):
         """
-        Describes the command signature when listed as a subcommand in the help message
-        of another command.
+        Describes the command signature when listed as a subcommand in the help
+        message of another command.
 
         Defaults to the command name.
         """
@@ -126,8 +171,14 @@ class CommandHelp(HelpMessage, metaclass=_HelpMetaclass):
             (sec.text for sec in self.sections if sec.active)
         )
 
+    def _copy_to(self, command: Command):
+        new: Any = super()._copy_to(command)
+        new: CommandHelp
+        new.command = command
+        return new
 
-class OptionHelp(HelpMessage, metaclass=_HelpMetaclass):
+
+class OptionHelp(Help, metaclass=_HelpMetaclass):
     """
     Attributes
     ----------
@@ -222,8 +273,14 @@ class OptionHelp(HelpMessage, metaclass=_HelpMetaclass):
         """The entire help text that overrides all other properties."""
         return HelpEntry(self.signature, self.desc).text
 
+    def _copy_to(self, option: Option):
+        new: Any = super()._copy_to(option)
+        new: OptionHelp
+        new.option = option
+        return new
 
-class GroupHelp(HelpMessage, metaclass=_HelpMetaclass):
+
+class GroupHelp(Help, metaclass=_HelpMetaclass):
     def __init__(self, group: AnyGroup):
         self.group = group
 
@@ -232,55 +289,14 @@ class GroupHelp(HelpMessage, metaclass=_HelpMetaclass):
         """The entire help text."""
         return ""
 
-
-class Help(DryParseType, metaclass=_NoInit):
-    """
-    Help object for an arbitrary dryparse object.
-
-    Constructing a ``Help`` object will return a specialized object depending
-    on the type of the wrapped object ``obj``. This will be one of:
-    :class:`OptionHelp`, :class:`CommandHelp`, :class:`GroupHelp`.
-
-    Parameters
-    ----------
-    obj: Command | Option | Group
-        Object for which to construct help.
-    """
-
-    def __init__(self, obj: Union[Command, Option, Group]):
-        _ = obj  # prevents 'unused' warning
-        super().__init__()
-
-    @overload
-    def __new__(cls, obj: Command) -> CommandHelp:
-        ...
-
-    @overload
-    def __new__(cls, obj: Option) -> OptionHelp:
-        ...
-
-    @overload
-    def __new__(cls, obj: Group) -> GroupHelp:
-        ...
-
-    def __new__(
-        cls, obj: Union[Command, Option, Group]
-    ) -> Union[CommandHelp, OptionHelp, GroupHelp]:
-        if isinstance(obj, Command):
-            class_ = CommandHelp
-        elif isinstance(obj, Option):
-            class_ = OptionHelp
-        elif isinstance(obj, Group):
-            class_ = GroupHelp
-        else:
-            raise TypeError("obj has invalid type")
-
-        if class_.override_class:
-            return class_.override_class(obj)
-        return class_(obj)
+    def _copy_to(self, group: Group):
+        new: Any = super()._copy_to(group)
+        new: GroupHelp
+        new.group = group
+        return new
 
 
-class HelpSection(DryParseType, metaclass=_HelpMetaclass):
+class HelpSection(DryParseType):
     def __init__(self, name_or_group: Union[str, Group]):
         if isinstance(name_or_group, str):
             self.name = name_or_group
@@ -332,7 +348,7 @@ class HelpSection(DryParseType, metaclass=_HelpMetaclass):
         indent = " " * self.indent
         return self.headline + "\n" + textwrap.indent(self.content, indent)
 
-    def str(self):
+    def __str__(self):
         return self.text
 
     def __repr__(self):
@@ -341,14 +357,37 @@ class HelpSection(DryParseType, metaclass=_HelpMetaclass):
 
 
 class HelpSectionList(DryParseType, List[HelpSection]):
-    """List of help sections."""
+    """
+    A glorified list of help sections.
+
+    Behaves exactly like a normal list, with the addition that you can also
+    access individual help sections as attributes, not just by indexing.
+    Sections added using regular list functions can only be accessed by index
+    (and iterators, etc.), while sections added by attribute assignment can
+    also be accessed as attributes. In the latter case, the index is determined
+    by the number of sections that existed before the section was added.
+
+    Examples
+    --------
+    >>> sections = HelpSectionList()
+    >>> # Create unnamed section at index 0
+    >>> sections.append(HelpSection("Usage"))
+    >>> # Create section named usage - index automatically set to be 1
+    >>> sections.commands = HelpSection("Commands")
+    >>> print(sections[0].text)
+    Usage:
+    >>> print(sections.usage.text)
+    Commands:
+    >>> print(sections[1])
+    Commands:
+    """
 
     def __init__(self, iterable: Iterable = ()):
         super().__init__(iterable=iterable)
 
     def __getitem__(self, item: Union[int, str, Group]):
         if isinstance(item, int):
-            return super()[item]
+            return super().__getitem__(item)
         elif isinstance(item, str):
             try:
                 return next((sec for sec in self if sec.name == item))
@@ -364,7 +403,7 @@ class HelpSectionList(DryParseType, List[HelpSection]):
         self.append(value)
 
 
-class HelpEntry(DryParseType, metaclass=_HelpMetaclass):
+class HelpEntry(DryParseType):
     """
     Represents an option or subcommand entry in a help message.
     """
@@ -426,11 +465,17 @@ class CommandDescription:
 
 
 class _CommandHelpSectionList(HelpSectionList):
+    """
+    Standard set of help sections for a CLI command.
+
+    Contains a command description, usage, subcommands and options section.
+    """
+
     def __init__(self, command: Command):
         super().__init__()
         self.desc = self.DescSection(command)
         self.usage = self.UsageSection(command)
-        self.commands = self.CommandsSection(command)
+        self.subcommands = self.CommandsSection(command)
         self.options = self.OptionsSection(command)
 
     class DescSection(HelpSection):
@@ -445,7 +490,7 @@ class _CommandHelpSectionList(HelpSectionList):
         def text(self):
             return Help(self.command).desc.long
 
-        def str(self):
+        def __str__(self):
             return self.text
 
         def __repr__(self):

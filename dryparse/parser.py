@@ -8,7 +8,8 @@ from .errors import (
     OptionDoesNotTakeArgumentsError,
     OptionRequiresArgumentError,
 )
-from .objects import Command, Meta, Option
+from .help import Help
+from .objects import Command, Meta, Option, ParsedCommand
 
 
 def parse(command: Command, args: List[str] = None):
@@ -34,7 +35,8 @@ def parse(command: Command, args: List[str] = None):
                 waiting_for_option_value = False
                 continue
             token, value = parse_arg(command, arg)
-            if isinstance(option := token, Option):
+            if isinstance(token, Option):
+                option = token
                 if value is not None and option.type != bool:
                     option.value = value
                 elif value is not None and option.type == bool:
@@ -45,8 +47,8 @@ def parse(command: Command, args: List[str] = None):
                     # The next argument ought to be the option value
                     waiting_for_option_value = True
                     option_str = arg
-            elif isinstance(cmd := token, Command):
-                parse(cmd, args[i:])
+            elif isinstance(token, Command):
+                parse(token, args[i:])
             else:
                 positional_args.append(arg)
 
@@ -54,7 +56,7 @@ def parse(command: Command, args: List[str] = None):
             raise OptionRequiresArgumentError(option_str)
 
     Meta(command).parsed_positional_args = positional_args
-    command()
+    return ParsedCommand(command)
 
 
 def parse_arg(

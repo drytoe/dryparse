@@ -52,12 +52,11 @@ class reassignable_property:
             return self._instance_overrides[instance](instance)
         return self.getter(instance)
 
-    def __set__(self, instance, func: Callable[[Any], Any]):
-        if isinstance(func, Callable):
-            self._instance_overrides[instance] = func
+    def __set__(self, instance, value_or_getter: Callable[[Any], Any]):
+        if isinstance(value_or_getter, Callable):
+            self._instance_overrides[instance] = value_or_getter
         else:
-            value = func
-            self._instance_overrides[instance] = lambda _: value
+            self._instance_overrides[instance] = lambda _: value_or_getter
 
     def __delete__(self, instance):
         del self._instance_overrides[instance]

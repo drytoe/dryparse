@@ -1,9 +1,7 @@
 """Object model of a command line program."""
-
+import copy
 import inspect
-from collections.abc import Sequence
-from types import EllipsisType
-from typing import Any, Callable, List, Tuple, Union
+from typing import Any, Callable, List, Tuple, Union, Sequence
 from weakref import WeakKeyDictionary
 
 from dryparse.util import _NoInit
@@ -100,10 +98,10 @@ class Arguments(DryParseType):
     """
     Specification for positional arguments of a command.
 
-    Positional arguments are specified on the command line as strings. There
-    must be a way to verify if the correct number of arguments was given, and
-    a way to convert each one to a useful python type. An instance of :class:`Arguments` holds a
-    pattern of acceptable arguments. The arguments are converted
+    Positional arguments are specified on the command line as regular strings,
+    but usually we want to restrict the number of allowed arguments, their data
+    types, add custom validation, etc. An instance of :class:`Arguments` holds
+    a pattern of acceptable argument types. The arguments are converted
     (and effectively validated) using :meth:`convert`.
 
     Attributes
@@ -148,7 +146,7 @@ class Arguments(DryParseType):
     >>> Arguments([int, (int, ...), (str, range(2, 3))])
     """
 
-    _NumberOfArgs = Union[int, EllipsisType, range]
+    _NumberOfArgs = Union[int, type(...), range]
     _PatternItem = Union[type, Tuple[type, _NumberOfArgs]]
 
     __slots__ = ["types", "value", "defaults"]
@@ -227,7 +225,7 @@ class Arguments(DryParseType):
             number = pattern_item[1]
             if isinstance(number, int):
                 return number
-            if isinstance(number, EllipsisType):
+            if isinstance(number, type(...)):
                 return 0
             if isinstance(number, range):
                 return number.start
@@ -240,7 +238,7 @@ class Arguments(DryParseType):
             number = pattern_item[1]
             if isinstance(number, int):
                 return number
-            if isinstance(number, EllipsisType):
+            if isinstance(number, type(...)):
                 return 999999999
             if isinstance(number, range):
                 return number.stop
@@ -272,16 +270,13 @@ class Command(DryParseType):
 
     You can assign arbitrary attributes dynamically. Only attributes of types
     :class:`Option`, :class:`Command`, :class:`Group` and others from
-    :mod:`dryparse.objects` have special meaning. Note that getting an
-    attribute of type :class:`Option` will return its value, not the option
-    itself.
+    :mod:`dryparse.objects` have special meaning to the parser.
 
     Examples
     --------
-    >>> cmd = Command("docker")
-    >>> cmd.context = Option("-c", "--context")
-    >>> print(cmd.context)
-    False
+    >>> docker = Command("docker")
+    >>> docker.context = Option("-c", "--context")
+    >>> docker.run = Command("run", desc="Run a command in a new container")
     """
 
     def __init__(self, name, regex=None, desc: str = None):
@@ -307,16 +302,6 @@ class Command(DryParseType):
         else:
             Meta(self).call()
 
-    def __getattribute__(self, name):
-        """
-        If the attribute is an option, return its value. Otherwise has the
-        default behavior.
-        """
-        attr = super().__getattribute__(name)
-        if isinstance(attr, Option):
-            return attr.value
-        return attr
-
     def __setattr__(self, name, value):
         if isinstance(value, Option):
             super().__setattr__(name, value)
@@ -329,8 +314,8 @@ class Command(DryParseType):
                 attr = super().__getattribute__(name)
             except AttributeError:
                 attr = None
-            if isinstance(option := attr, Option):
-                option: Option
+            if isinstance(attr, Option):
+                option: Option = attr
                 option.value = value
             else:
                 super().__setattr__(name, value)
@@ -342,6 +327,56 @@ class Command(DryParseType):
         elif isinstance(value, Command):
             Meta(self).subcommands.remove(value)
         super().__delattr__(name)
+
+
+class ParsedCommand(Command):
+    """
+    Wrapper around :class:`Command` that provides access to option values as if
+    they were regular attributes.
+
+    Examples
+    --------
+    >>> # Initialize a simple command with an option
+    >>> cmd = Command("test")
+    >>> cmd.option = Option("--option", default="DEFAULT")
+    >>> # Convert Command into a ParsedCommand
+    >>> parsed_cmd = ParsedCommand(cmd)
+    >>> print(parsed_cmd.option)
+    DEFAULT
+    >>> # Assignment works like with a regular command
+    >>> parsed_cmd.option = "NON_DEFAULT"
+    >>> print(parsed_cmd)
+    NON_DEFAULT
+    """
+
+    def __init__(self, command: Command):
+        _ = command  # prevents 'unused' warning
+        pass
+
+    def __new__(cls, command: Command):
+        parsed_cmd = copy.copy(command)
+        if type(parsed_cmd) == Command:
+            parsed_cmd.__class__ = ParsedCommand
+        else:
+            parsed_cmd.__bases__ = type(parsed_cmd.__bases__)(
+                (base if base != Command else ParsedCommand)
+                for base in parsed_cmd.__bases__
+            )
+        from dryparse.help import Help
+        Help(parsed_cmd).__dict__ = Help(command).__dict__
+        Help(parsed_cmd).command = parsed_cmd
+        return parsed_cmd
+
+    def __getattribute__(self, name):
+        """
+        If the attribute is an option, return its value. Otherwise, it has the
+        default behavior.
+        """
+
+        attr = super().__getattribute__(name)
+        if isinstance(attr, Option):
+            return attr.value
+        return attr
 
 
 class RootCommand(Command):
@@ -373,16 +408,9 @@ class Meta(DryParseType, metaclass=_NoInit):
     """
     Meta wrapper for :class:`Command` that can be used to access special
     attributes of :class:`Command`.
-
-    Attributes
-    ----------
-    called: bool
-        Indicates whether this command was called.
     """
 
-    _command_to_meta_map: WeakKeyDictionary[
-        Command, "Meta"
-    ] = WeakKeyDictionary()
+    _command_to_meta_map = WeakKeyDictionary()
 
     def __init__(self, command: Command):
         self.options: List[Option] = []
@@ -391,7 +419,6 @@ class Meta(DryParseType, metaclass=_NoInit):
         self.arguments = None
         self.name = ""
         self.regex = ""
-        self.called = False
         _ = command  # prevents some warnings
 
     def __new__(cls, command: Command):
