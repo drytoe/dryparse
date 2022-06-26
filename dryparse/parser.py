@@ -8,7 +8,6 @@ from .errors import (
     OptionDoesNotTakeArgumentsError,
     OptionRequiresArgumentError,
 )
-from .help import Help
 from .objects import Command, Meta, Option, ParsedCommand
 
 
@@ -55,7 +54,6 @@ def parse(command: Command, args: List[str] = None):
         if waiting_for_option_value:
             raise OptionRequiresArgumentError(option_str)
 
-    Meta(command).parsed_positional_args = positional_args
     return ParsedCommand(command)
 
 
@@ -101,7 +99,7 @@ def parse_arg(
                 return opt, value
 
     for cmd in Meta(command).subcommands:
-        if re.fullmatch(cmd.regex, arg):
+        if re.fullmatch(Meta(cmd).regex, arg):
             return cmd
 
     return None, None

@@ -1,7 +1,7 @@
 """Object model of a command line program."""
 import copy
 import inspect
-from typing import Any, Callable, List, Tuple, Union, Sequence
+from typing import Any, Callable, List, Sequence, Tuple, Union
 from weakref import WeakKeyDictionary
 
 from dryparse.util import _NoInit
@@ -16,6 +16,9 @@ class Group(DryParseType):
 
     def __init__(self, name: str):
         self.name = name
+        from .help import GroupHelp
+
+        self.help = GroupHelp(self)
 
 
 class Option(DryParseType):
@@ -30,6 +33,10 @@ class Option(DryParseType):
         Regex pattern that the long version of this option should match
         against. Usually this is two hyphens followed by multiple letters.
         (e.g. `--long`)
+    Attributes
+    ----------
+    help: OptionHelp
+        Customizable help object.
     """
 
     def __init__(
@@ -50,13 +57,13 @@ class Option(DryParseType):
             self.value = default
         else:
             self.value = None
-        if not (argname is None and desc is None):
-            from .help import Help
+        from .help import OptionHelp
 
-            if argname is not None:
-                Help(self).argname = argname
-            if desc is not None:
-                Help(self).desc = desc
+        self.help = OptionHelp(self)
+        if argname is not None:
+            self.help.argname = argname
+        if desc is not None:
+            self.help.desc = desc
 
     def __setattr__(self, key, value):
         if key == "build":
@@ -149,7 +156,7 @@ class Arguments(DryParseType):
     _NumberOfArgs = Union[int, type(...), range]
     _PatternItem = Union[type, Tuple[type, _NumberOfArgs]]
 
-    __slots__ = ["types", "value", "defaults"]
+    __slots__ = ("types", "value", "defaults")
 
     def __init__(
         self,
@@ -286,9 +293,7 @@ class Command(DryParseType):
         self.help = Option("-h", "--help", desc="print help message and exit")
 
         if desc is not None:
-            from .help import Help
-
-            Help(self).desc = desc
+            meta.help.desc = desc
 
     def __call__(self, *args, help=None, **kwargs):
         """
@@ -296,11 +301,9 @@ class Command(DryParseType):
         options like help and version, and handle subcommands.
         """
         if help or (help is None and hasattr(self, "help") and self.help):
-            from .help import Help
-
-            print(Help(self).text)
+            print(Meta(self).help.text)
         else:
-            Meta(self).call()
+            Meta(self).call(*args, help=help, **kwargs)
 
     def __setattr__(self, name, value):
         if isinstance(value, Option):
@@ -319,6 +322,15 @@ class Command(DryParseType):
                 option.value = value
             else:
                 super().__setattr__(name, value)
+
+    def __copy__(self):
+        return copy.deepcopy(self)
+
+    def __deepcopy__(self, memo=None):
+        new = copy.deepcopy(super(), memo)
+        new.__class__ = self.__class__
+        Meta(self)._copy_to(Meta(new), memo)
+        return new
 
     def __delattr__(self, name):
         value = super().__getattribute__(name)
@@ -354,17 +366,23 @@ class ParsedCommand(Command):
         pass
 
     def __new__(cls, command: Command):
-        parsed_cmd = copy.copy(command)
-        if type(parsed_cmd) == Command:
+        parsed_cmd = copy.deepcopy(command)
+        # Matches any of the `Command` subclasses defined in this module
+        if command.__module__ == cls.__module__:
             parsed_cmd.__class__ = ParsedCommand
         else:
+            # All bases that are subclasses of `Command` and were defined in
+            # this module (not by the dryparse library user) are replaced by
+            # `ParsedCommand`.
             parsed_cmd.__bases__ = type(parsed_cmd.__bases__)(
-                (base if base != Command else ParsedCommand)
+                (
+                    base
+                    if not isinstance(base, Command)
+                    and base.__module__ == cls.__module__
+                    else ParsedCommand
+                )
                 for base in parsed_cmd.__bases__
             )
-        from dryparse.help import Help
-        Help(parsed_cmd).__dict__ = Help(command).__dict__
-        Help(parsed_cmd).command = parsed_cmd
         return parsed_cmd
 
     def __getattribute__(self, name):
@@ -419,18 +437,29 @@ class Meta(DryParseType, metaclass=_NoInit):
         self.arguments = None
         self.name = ""
         self.regex = ""
-        _ = command  # prevents some warnings
+        from .help import CommandHelp
+
+        self.help = CommandHelp(command)
 
     def __new__(cls, command: Command):
         try:
             return cls._command_to_meta_map[command]
         except KeyError:
-            help = cls._command_to_meta_map[command] = super().__new__(cls)
-            help.__init__(command)
-            return help
+            meta = cls._command_to_meta_map[command] = super().__new__(cls)
+            meta.__init__(command)
+            return meta
 
     def call(self, *args, **kwargs):
         pass
 
-    def callback(self, func: Callable):
+    def set_callback(self, func: Callable):
         self.call = func
+
+    def _copy_to(self, destination: "Meta", memo=None):
+        """Perform a deep copy from ``self`` to ``destination``."""
+        destination.options = copy.deepcopy(self.options, memo=memo)
+        destination.subcommands = copy.deepcopy(self.subcommands, memo=memo)
+        destination.arguments = self.arguments
+        destination.name = self.name
+        destination.regex = self.regex
+        destination.help = copy.deepcopy(self.help, memo=memo)

@@ -1,18 +1,17 @@
 import copy
 import textwrap
-import weakref
 from io import StringIO
-from typing import Any, Iterable, List, Optional, Union, overload
+from typing import Iterable, List, Optional, Union
 
 from dryparse.objects import Command, DryParseType, Group, Meta, Option
-from dryparse.util import _NoInit, reassignable_property
+from dryparse.util import reassignable_property
 
 AnyGroup = Union[str, Group]
 _HelpableObject = Union[Command, Option, Group]
 _ConcreteHelp = Union["CommandHelp", "OptionHelp", "GroupHelp"]
 
 
-class _HelpMetaclass(_NoInit):
+class _HelpMetaclass(type):
     _override_class = None
 
     @property
@@ -33,71 +32,33 @@ class _HelpMetaclass(_NoInit):
     #  constructed instead of an instance of the given class.
 
 
-class Help(DryParseType, metaclass=_HelpMetaclass):
+class DryParseHelpType(DryParseType):
+    def __deepcopy__(self, memo=None):
+        return reassignable_property.deepcopy_func(self.__class__)(self, memo)
+
+
+class Help(DryParseHelpType, metaclass=_HelpMetaclass):
     """
     Hierarchical representation of a help message. You can customize every
     individual part or subpart of it, or its entirety.
-
-    Constructing a ``Help`` object will return a specialized object depending
-    on the type of the wrapped object ``obj``. This will be one of:
-    :class:`OptionHelp`, :class:`CommandHelp`, :class:`GroupHelp`.
-
-    Parameters
-    ----------
-    obj: Command | Option | Group
-        Object for which to construct help.
     """
-
-    _object_to_help_map = weakref.WeakKeyDictionary()
-
-    def __init__(self, obj: _HelpableObject):
-        _ = obj  # prevents 'unused' warning
-        super().__init__()
-
-    @overload
-    def __new__(cls, obj: Command) -> "CommandHelp":
-        ...
-
-    @overload
-    def __new__(cls, obj: Option) -> "OptionHelp":
-        ...
-
-    @overload
-    def __new__(cls, obj: Group) -> "GroupHelp":
-        ...
-
-    def __new__(cls, obj: _HelpableObject) -> _ConcreteHelp:
-        if isinstance(obj, Command):
-            class_ = CommandHelp
-        elif isinstance(obj, Option):
-            class_ = OptionHelp
-        elif isinstance(obj, Group):
-            class_ = GroupHelp
-        else:
-            raise TypeError("obj has invalid type")
-
-        if class_.override_class:
-            class_ = class_.override_class
-
-        try:
-            retval: Any = cls._object_to_help_map[obj]
-            return retval
-        except KeyError:
-            help = cls._object_to_help_map[obj] = super().__new__(class_)
-            help.__init__(obj)
-            return help
 
     @reassignable_property
     def text(self):
+        """
+        The entire help text.
+
+        Overriding this property makes all the other properties obsolete.
+        """
         raise NotImplementedError
+
+    text: str
 
     def __str__(self):
         return self.text
 
-    def _copy_to(self, obj: _HelpableObject):
-        """Make ``command``'s help message identical to this one."""
-        new = self.__class__._object_to_help_map[obj] = copy.copy(self)
-        return new
+    def __copy__(self):
+        raise NotImplementedError
 
 
 class CommandHelp(Help, metaclass=_HelpMetaclass):
@@ -134,6 +95,8 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
         """
         return Meta(self.command).name
 
+    signature: str
+
     @reassignable_property
     def desc(self) -> "CommandDescription":
         """
@@ -145,15 +108,21 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
         """
         return CommandDescription("")
 
+    desc: "CommandDescription"
+
     @reassignable_property
     def sections(self):
         """Sections of this help message."""
         return self._sections
 
+    sections: "_CommandHelpSectionList"
+
     @reassignable_property
     def section_separator(self):
         """Separator between sections of this help message."""
         return "\n\n"
+
+    section_separator: str
 
     @reassignable_property
     def listing(self):
@@ -164,18 +133,13 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
         meta = Meta(self.command)
         return HelpEntry(meta.name, self.desc.brief).text
 
+    listing: "HelpEntry"
+
     @reassignable_property
     def text(self):
-        """The entire help text."""
         return self.section_separator.join(
-            (sec.text for sec in self.sections if sec.active)
+            sec.text for sec in self.sections if sec.active
         )
-
-    def _copy_to(self, command: Command):
-        new: Any = super()._copy_to(command)
-        new: CommandHelp
-        new.command = command
-        return new
 
 
 class OptionHelp(Help, metaclass=_HelpMetaclass):
@@ -183,8 +147,8 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
     Attributes
     ----------
     override_class: Optional[Type[OptionHelp]]
-        When obtaining a help object using ``Help(option)``, return an instance
-        of ``override_class`` instead of :class:`OptionHelp`.
+        When instantiating an object of type :class:`OptionHelp`, return an
+        instance of ``override_class`` instead.
     """
 
     def __init__(self, option: Option):
@@ -195,10 +159,14 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
         """Option description."""
         return ""
 
+    desc: str
+
     @reassignable_property
     def argname(self):
         """Name of the argument to this option."""
         return self.option.long.upper()[2:] or self.option.short.upper()[1:]
+
+    argname: str
 
     @reassignable_property
     def signature(self) -> str:
@@ -242,6 +210,8 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
         )
         return ", ".join(filter(None, (short, long)))
 
+    signature: str
+
     @reassignable_property
     def hint(self):
         """
@@ -268,16 +238,11 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
             + "]"
         )
 
+    hint: str
+
     @reassignable_property
     def text(self):
-        """The entire help text that overrides all other properties."""
         return HelpEntry(self.signature, self.desc).text
-
-    def _copy_to(self, option: Option):
-        new: Any = super()._copy_to(option)
-        new: OptionHelp
-        new.option = option
-        return new
 
 
 class GroupHelp(Help, metaclass=_HelpMetaclass):
@@ -286,17 +251,12 @@ class GroupHelp(Help, metaclass=_HelpMetaclass):
 
     @reassignable_property
     def text(self):
-        """The entire help text."""
-        return ""
+        return ""  # TODO
 
-    def _copy_to(self, group: Group):
-        new: Any = super()._copy_to(group)
-        new: GroupHelp
-        new.group = group
-        return new
+    text: str
 
 
-class HelpSection(DryParseType):
+class HelpSection(DryParseHelpType):
     def __init__(self, name_or_group: Union[str, Group]):
         if isinstance(name_or_group, str):
             self.name = name_or_group
@@ -311,9 +271,13 @@ class HelpSection(DryParseType):
         """Section name."""
         return ""
 
+    name: str
+
     @reassignable_property
     def group(self) -> Optional[Group]:
         return None
+
+    group: str
 
     @reassignable_property
     def headline(self):
@@ -324,14 +288,20 @@ class HelpSection(DryParseType):
         """
         return f"{self.name}:"
 
+    headline: str
+
     @reassignable_property
     def content(self) -> str:
         return ""
+
+    content: str
 
     @reassignable_property
     def indent(self):
         """Indent for the content of this section."""
         return 2
+
+    indent: int
 
     @reassignable_property
     def active(self):
@@ -342,11 +312,17 @@ class HelpSection(DryParseType):
         """
         return bool(self.text)
 
+    active: bool
+
     @reassignable_property
     def text(self):
-        """The entire help text."""
-        indent = " " * self.indent
-        return self.headline + "\n" + textwrap.indent(self.content, indent)
+        return (
+            self.headline
+            + "\n"
+            + textwrap.indent(self.content, " " * self.indent)
+        )
+
+    text: str
 
     def __str__(self):
         return self.text
@@ -356,7 +332,7 @@ class HelpSection(DryParseType):
         return f"<{cls.__module__}.{cls.__qualname__}[{repr(self.name)}] at {hex(id(self))}>"
 
 
-class HelpSectionList(DryParseType, List[HelpSection]):
+class HelpSectionList(List[HelpSection], DryParseHelpType):
     """
     A glorified list of help sections.
 
@@ -383,7 +359,7 @@ class HelpSectionList(DryParseType, List[HelpSection]):
     """
 
     def __init__(self, iterable: Iterable = ()):
-        super().__init__(iterable=iterable)
+        super().__init__(iterable)
 
     def __getitem__(self, item: Union[int, str, Group]):
         if isinstance(item, int):
@@ -398,17 +374,31 @@ class HelpSectionList(DryParseType, List[HelpSection]):
         else:
             raise TypeError("`item` must be of type str or int")
 
-    def __setattr__(self, key, value):
+    def __setattr__(self, key: str, value):
+        if not (key.startswith("__") and key.endswith("__")):
+            if not hasattr(self, key):
+                self.append(value)
+            else:
+                self[self.index(getattr(self, key))] = value
         super().__setattr__(key, value)
-        self.append(value)
+
+    def __copy__(self):
+        new = HelpSectionList(list(self))
+        new.__dict__ = copy.copy(self.__dict__)
+        return new
+
+    def __deepcopy__(self, memo=None):
+        new = HelpSectionList(copy.deepcopy(list(self), memo))
+        new.__dict__ = copy.deepcopy(self.__dict__, memo)
+        return new
 
 
-class HelpEntry(DryParseType):
+class HelpEntry(DryParseHelpType):
     """
     Represents an option or subcommand entry in a help message.
     """
 
-    __slots__ = ["signature", "desc"]
+    __slots__ = ("signature", "desc")
 
     def __init__(self, signature, desc):
         self.signature = signature
@@ -423,6 +413,8 @@ class HelpEntry(DryParseType):
         """
         return 32
 
+    signature_width: int
+
     @reassignable_property
     def padded_signature(self):
         """
@@ -430,12 +422,16 @@ class HelpEntry(DryParseType):
         """
         return self.signature.ljust(self.signature_width, " ")
 
+    padded_signature: str
+
     @reassignable_property
     def text(self):
         if self.desc:
             return self.padded_signature + self.desc
         else:
             return self.signature
+
+    text: str
 
 
 class CommandDescription:
@@ -451,7 +447,7 @@ class CommandDescription:
         subcommand in another command's help text. Falls back to ``long``.
     """
 
-    __slots__ = ["long", "brief"]
+    __slots__ = ("long", "brief")
 
     def __init__(self, long, brief=None):
         self.long = long
@@ -479,7 +475,7 @@ class _CommandHelpSectionList(HelpSectionList):
         self.options = self.OptionsSection(command)
 
     class DescSection(HelpSection):
-        __slots__ = ["command"]
+        __slots__ = ("command",)
 
         def __init__(self, command: Command):
             super().__init__("description")
@@ -488,7 +484,7 @@ class _CommandHelpSectionList(HelpSectionList):
 
         @reassignable_property
         def text(self):
-            return Help(self.command).desc.long
+            return Meta(self.command).help.desc.long
 
         def __str__(self):
             return self.text
@@ -497,7 +493,7 @@ class _CommandHelpSectionList(HelpSectionList):
             return object.__repr__(self)
 
     class UsageSection(HelpSection):
-        __slots__ = ["command"]
+        __slots__ = ("command",)
 
         def __init__(self, command: Command):
             super().__init__("usage")
@@ -509,7 +505,7 @@ class _CommandHelpSectionList(HelpSectionList):
             out = StringIO()
             print(
                 f"Usage: {meta.name}",
-                " ".join(Help(opt).hint for opt in meta.options),
+                " ".join(opt.help.hint for opt in meta.options),
                 file=out,
                 end="",
             )
@@ -522,7 +518,7 @@ class _CommandHelpSectionList(HelpSectionList):
             return object.__repr__(self)
 
     class CommandsSection(HelpSection):
-        __slots__ = ["command"]
+        __slots__ = ("command",)
 
         def __init__(self, command: Command):
             super().__init__("Commands")
@@ -532,7 +528,7 @@ class _CommandHelpSectionList(HelpSectionList):
         def content(self):
             meta = Meta(self.command)
             return "\n".join(
-                tuple(Help(cmd).listing for cmd in meta.subcommands)
+                tuple(Meta(cmd).help.listing for cmd in meta.subcommands)
             )
 
         @reassignable_property
@@ -541,7 +537,7 @@ class _CommandHelpSectionList(HelpSectionList):
             return bool(meta.subcommands)
 
     class OptionsSection(HelpSection):
-        __slots__ = ["command"]
+        __slots__ = ("command",)
 
         def __init__(self, command: Command):
             super().__init__("Options")
@@ -550,7 +546,7 @@ class _CommandHelpSectionList(HelpSectionList):
         @reassignable_property
         def content(self):
             meta = Meta(self.command)
-            return "\n".join(tuple(Help(opt).text for opt in meta.options))
+            return "\n".join(tuple(opt.help.text for opt in meta.options))
 
         @reassignable_property
         def active(self):

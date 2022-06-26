@@ -1,8 +1,7 @@
 import textwrap
 
 from dryparse import Command, parse
-from dryparse.help import Help
-from dryparse.objects import Option, RootCommand
+from dryparse.objects import Option, RootCommand, Arguments
 from dryparse.parser import parse_arg
 
 
@@ -23,7 +22,7 @@ class TestParser:
         opt, value = parse_arg(cmd, "--output=file2")
         assert isinstance(opt, Option) and value == "file2"
 
-    def test_parse_command_with_options(self, capfd):
+    def test_parse_command_with_options(self):
         cmd = Command("test")
         cmd.random = Option("-r", "--random")
         cmd.output = Option("-o", "--output", type=str)
@@ -34,23 +33,21 @@ class TestParser:
             "file",
         ]
 
-        parse(cmd, args)
-        assert cmd.random and cmd.output == "file"
-        cap = capfd.readouterr()
-        assert not cap.out and not cap.err
+        cmd = parse(cmd, args)
+        assert type(cmd.random) == bool and cmd.random and cmd.output == "file"
 
     def test_parse_command_help(self, capfd):
         cmd = Command("test")
         random = Option("-r", "--random")
         cmd.random = random
-        Help(random).signature = "--random, -r"
+        random.help.signature = "--random, -r"
         cmd.output = Option("-o", "--output", type=str, desc="output file")
         cmd.config = Option(long="--config", type=str, argname="FILE")
         args = ["test", "-h", "--random", "positional"]
 
-        parse(cmd, args)
+        cmd = parse(cmd, args)
+        cmd()
         cap = capfd.readouterr()
-        print(cap.out)
         assert cap.out == textwrap.dedent(
             """\
             Usage: test [-h] [-r] [-o OUTPUT] [--config FILE]
@@ -63,6 +60,14 @@ class TestParser:
             """
         )
         assert not cap.err
+
+    def test_simple_command(self):
+        cmd = Command("test")
+        cmd.opt1 = Option("-1", "--opt1", default="opt1_default")
+        cmd.opt2 = Option("-2", "--opt2", default="opt2_default", type=int)
+        cmd.args = Arguments([bool, int])
+
+        cmd = parse(cmd, ["test", "--opt2", "opt2_value", "True", "10"])
 
 
 class TestFakeDocker:
@@ -83,4 +88,4 @@ class TestFakeDocker:
         run.tty = Option("-t", "--tty", desc="TODO")
 
     def test_help(self, capfd):
-        parse(self.cmd, ["/usr/bin/docker", "-D", "run", "TODO"])
+        cmd = parse(self.cmd, ["/usr/bin/docker", "-D", "run", "TODO"])
