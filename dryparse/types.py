@@ -30,3 +30,13 @@ class Counter(OptionType):
 
     def __init__(self):
         pass  # TODO
+
+
+class Bool(OptionType, bool):
+    """
+    A bool type that understands ``"true"``, ``"True"``, ``"false"``,
+    ``"False"`` and empty string.
+    """
+
+    def __init__(self):
+        pass

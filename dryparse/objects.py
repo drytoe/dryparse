@@ -1,10 +1,17 @@
 """Object model of a command line program."""
 import copy
 import inspect
-from typing import Any, Callable, List, Sequence, Tuple, Union
+from typing import Any, Callable, List, NoReturn, Sequence, Tuple, Union
 from weakref import WeakKeyDictionary
 
+from dryparse.errors import (
+    ArgumentConversionError,
+    InvalidArgumentPatternError,
+    PatternAfterFlexiblePatternError,
+)
 from dryparse.util import _NoInit
+
+_EllipsisType = type(Ellipsis)
 
 
 class DryParseType:
@@ -128,88 +135,167 @@ class Arguments(DryParseType):
         a special value meaning *zero or more arguments*. A range specifies a
         range of acceptable argument numbers.
 
+    Notes
+    -----
+    - ``(type, ...)``- and ``(type, range)``- style patterns cannot be followed
+      by further patterns. Instead, you should implement a custom converter
+      function.
+    - For boolean types, you might want to use :class:`~dryparse.types.Bool`
+      instead of ``bool``, because of potentially undesired behaviors like
+      ``bool("false") == True``, etc.
+
     Examples
     --------
 
     Here's quite an exhaustive list of example use cases:
 
     >>> # Single argument of type int
-    >>> Arguments([int])
+    >>> Arguments(int)
     >>> # Two arguments of type bool
-    >>> Arguments([(bool, 2)])
+    >>> Arguments((bool, 2))
     >>> # Single int and two bools
-    >>> Arguments([int, (bool, 2)])
+    >>> Arguments(int, (bool, 2))
     >>> # Zero or more strings
-    >>> Arguments([(str, ...)])
+    >>> Arguments((str, ...))
     >>> # One or more strings
-    >>> Arguments([str, (str, ...)])
+    >>> Arguments(str, (str, ...))
     >>> # Between 2 and 4 strings
-    >>> Arguments([(str, range(2, 4))])
+    >>> Arguments((str, range(2, 4)))
     >>> # One int and zero or more strings
-    >>> Arguments([int, (str, ...)])
-    >>> # Zero or more ints, and a string at the end
-    >>> Arguments([(int, ...), str])
-    >>> # 1 or more ints, 2-3 strings
-    >>> Arguments([int, (int, ...), (str, range(2, 3))])
+    >>> Arguments(int, (str, ...))
+    >>> # ERROR: there can be no patterns after a (type, ...)-style pattern
+    >>> Arguments(int, (int, ...), str)
+    >>> # ERROR: there can be no patterns after a (type, range)-style pattern
+    >>> Arguments(int, (int, range(1, 2)), str)
     """
-
-    _NumberOfArgs = Union[int, type(...), range]
-    _PatternItem = Union[type, Tuple[type, _NumberOfArgs]]
 
     __slots__ = ("types", "value", "defaults")
 
+    _NumberOfArgs = Union[int, _EllipsisType, range]
+    _PatternItem = Union[type, Tuple[type, _NumberOfArgs]]
+
     def __init__(
         self,
-        pattern: Sequence[_PatternItem],
+        *pattern: _PatternItem,
     ):
+        if not pattern:
+            self.pattern = [(str, ...)]
+            return
+        # NOTE: when referring to a flexible pattern, we mean either a
+        # (type, ...)-style or a (type, range)-style pattern
+        flexible_pattern_found = False
+        for item in pattern:
+            if flexible_pattern_found:
+                raise PatternAfterFlexiblePatternError
+            if isinstance(item, tuple):
+                if len(item) != 2:
+                    raise InvalidArgumentPatternError
+                elif isinstance(item[1], (_EllipsisType, range)):
+                    flexible_pattern_found = True
+                elif not isinstance(item[0], type) or (
+                    not isinstance(item[1], (_EllipsisType, range))
+                    # Hint: a bool is also an int, but we don't allow it
+                    and not (
+                        not isinstance(item[1], bool)
+                        and isinstance(item[1], int)
+                        and item[1] > 0
+                    )
+                ):
+                    raise InvalidArgumentPatternError
+            elif not isinstance(item, type):
+                raise InvalidArgumentPatternError
         self.pattern = pattern
 
-    def convert(self, args: List[str]):
+    def convert(self, args: Sequence[str]) -> Union[List[Any], Any]:
         """
-        Convert (and consequently validate) a list of ``args`` specified on the
-        command line to a list of arguments conforming to :attr:`pattern`.
+        Convert (and consequently validate) a list of ``args`` that were
+        possibly specified on the command line to a list of arguments
+        conforming to :attr:`pattern`.
 
         If the conversion of any of the arguments throws an exception, the
         conversion (and validation) will fail. (TODO exception)
         """
-        # args with type conversions from self.pattern applied
-        modified_args = []
-        pattern_index = 0
+        converted_args = []
+        flexible_pattern: Union[Tuple[_EllipsisType, range], None] = None
         arg_index = 0
-        args_per_pattern_item = [[]] * len(self.pattern)
-        assigned_pattern_item_for_arg: List[Any] = [None] * len(args)
-        while True:
-            pattern_item = self.pattern[pattern_index]
-            # Minimum and maximum number of arguments that can be associated
-            # with pattern_item
-            min_num_of_args = self._min_num_of_args(pattern_item)
-            max_num_of_args = self._max_num_of_args(pattern_item)
 
-            if min_num_of_args > len(args) - arg_index:
-                # TODO concrete exception subclass
-                raise Exception(
-                    f"Not enough arguments to satisfy pattern {pattern_item}"
-                )
-            # To each pattern_item assigns a range of arguments that conform
-            # to that pattern item
-            args_per_pattern_item[pattern_index] += range(
-                arg_index, arg_index + max_num_of_args
-            )
-            # Assigns the necessary number of args to pattern_items in order
-            # for the pattern to be satisfied
-            assigned_pattern_item_for_arg[
-                arg_index : arg_index + min_num_of_args
-            ] = pattern_index
+        def msg_expected_more_input_args(pattern_: Arguments._PatternItem):
+            f"Pattern {self._pattern_item_to_str(pattern_)} expected more input arguments"
 
-            pattern_index += 1
-            if pattern_index >= len(self.pattern):
+        def raise_type_conversion_error(
+            original_err: Exception,
+            pattern_: Arguments._PatternItem,
+            args_: Sequence[str],
+        ) -> NoReturn:
+            raise ArgumentConversionError(
+                f"Argument could not be converted to specified type: "
+                f"{self._pattern_item_to_str(pattern_)}",
+                arguments=args_,
+                index=arg_index,
+            ) from original_err
+
+        for pattern in self.pattern:
+            # If there is a flexible pattern, it can only be at the end.
+            # This pattern will be handled separately.
+            if isinstance(pattern, tuple) and isinstance(
+                pattern[1], (_EllipsisType, range)
+            ):
+                flexible_pattern = pattern
                 break
-            arg_index += min_num_of_args
 
-        for i, arg in enumerate(args):
-            assigned_pattern_item_index = assigned_pattern_item_for_arg[i]
-            if assigned_pattern_item_for_arg[i] is not None:
-                modified_args[i] = self.pattern[assigned_pattern_item_index][0]
+            if isinstance(pattern, type):
+                try:
+                    arg = args[arg_index]
+                except IndexError:
+                    raise ArgumentConversionError(
+                        msg_expected_more_input_args(pattern)
+                    )
+                converted = None
+                try:
+                    converted = pattern(arg)
+                except Exception as e:
+                    raise_type_conversion_error(e, pattern, (arg,))
+                converted_args.append(converted)
+                arg_index += 1
+            elif isinstance(pattern, tuple):
+                type_: type = pattern[0]
+                number: int = pattern[1]
+                if len(args) - arg_index < number:
+                    raise ArgumentConversionError(
+                        msg_expected_more_input_args(pattern),
+                    )
+                converted_args += map(
+                    type_, args[arg_index : arg_index + number]
+                )
+                arg_index += number
+
+        if isinstance(flexible_pattern, tuple):
+            pattern = flexible_pattern
+            number: Union[_EllipsisType, range] = pattern[1]
+            if isinstance(number, _EllipsisType):
+                try:
+                    converted_args += map(pattern[0], args[arg_index:])
+                except Exception as e:
+                    raise_type_conversion_error(e, pattern, args[arg_index:])
+            elif isinstance(number, range):
+                remaining_length = len(args) - arg_index
+                if number.start <= remaining_length <= number.stop:
+                    converted_args += map(pattern[0], args[arg_index:])
+                else:
+                    raise ArgumentConversionError(
+                        f"Wrong number of input args for pattern: "
+                        f"{self._pattern_item_to_str(self.pattern[-1])}"
+                    )
+        elif len(args) - arg_index > 0:
+            raise ArgumentConversionError("Too many input arguments")
+
+        if len(self.pattern) == 1 and (
+            isinstance(self.pattern[0], type)
+            or isinstance(self.pattern[0], tuple)
+            and self.pattern[0][1] == 1
+        ):
+            return converted_args[0]
+        return converted_args
 
     def assign(self, args: List[str]):
         """
@@ -232,7 +318,7 @@ class Arguments(DryParseType):
             number = pattern_item[1]
             if isinstance(number, int):
                 return number
-            if isinstance(number, type(...)):
+            if isinstance(number, _EllipsisType):
                 return 0
             if isinstance(number, range):
                 return number.start
@@ -245,7 +331,7 @@ class Arguments(DryParseType):
             number = pattern_item[1]
             if isinstance(number, int):
                 return number
-            if isinstance(number, type(...)):
+            if isinstance(number, _EllipsisType):
                 return 999999999
             if isinstance(number, range):
                 return number.stop
@@ -255,7 +341,7 @@ class Arguments(DryParseType):
         if isinstance(pattern_item, type):
             return pattern_item.__name__
         if isinstance(pattern_item, tuple):
-            return f"({', '.join(pattern_item)})"
+            return f"({', '.join(str(pattern_item))})"
 
     class _PatternItemWrapper:
         """
@@ -303,7 +389,7 @@ class Command(DryParseType):
         if help or (help is None and hasattr(self, "help") and self.help):
             print(Meta(self).help.text)
         else:
-            Meta(self).call(*args, help=help, **kwargs)
+            Meta(self).call(self, *args, help=help, **kwargs)
 
     def __setattr__(self, name, value):
         if isinstance(value, Option):
@@ -452,7 +538,7 @@ class Meta(DryParseType, metaclass=_NoInit):
     def call(self, *args, **kwargs):
         pass
 
-    def set_callback(self, func: Callable):
+    def set_callback(self, func: Callable[[Command], Any]):
         self.call = func
 
     def _copy_to(self, destination: "Meta", memo=None):
@@ -463,3 +549,4 @@ class Meta(DryParseType, metaclass=_NoInit):
         destination.name = self.name
         destination.regex = self.regex
         destination.help = copy.deepcopy(self.help, memo=memo)
+        destination.call = self.call

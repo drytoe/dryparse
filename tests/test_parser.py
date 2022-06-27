@@ -1,7 +1,13 @@
 import textwrap
 
 from dryparse import Command, parse
-from dryparse.objects import Option, RootCommand, Arguments
+from dryparse.objects import (
+    Option,
+    RootCommand,
+    Arguments,
+    Meta,
+    ParsedCommand,
+)
 from dryparse.parser import parse_arg
 
 
@@ -65,9 +71,20 @@ class TestParser:
         cmd = Command("test")
         cmd.opt1 = Option("-1", "--opt1", default="opt1_default")
         cmd.opt2 = Option("-2", "--opt2", default="opt2_default", type=int)
-        cmd.args = Arguments([bool, int])
+        cmd.args = Arguments(bool, int)
 
-        cmd = parse(cmd, ["test", "--opt2", "opt2_value", "True", "10"])
+        callback_called = False
+
+        def callback(self_: ParsedCommand):
+            nonlocal callback_called
+            callback_called = True
+            assert self_.opt1 == "opt1_default"
+
+        Meta(cmd).set_callback(callback)
+        cmd = parse(cmd, ["test", "--opt2", "2", "True", "10"])
+        cmd()
+
+        assert callback_called
 
 
 class TestFakeDocker:

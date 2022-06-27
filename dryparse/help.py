@@ -111,11 +111,16 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
     desc: "CommandDescription"
 
     @reassignable_property
-    def sections(self):
-        """Sections of this help message."""
+    def sections(self) -> "HelpSectionList":
+        """
+        Sections of this help message.
+
+        Default implementation returns a standard command section list
+        including "usage", "subcommands", etc.
+        """
         return self._sections
 
-    sections: "_CommandHelpSectionList"
+    sections: "HelpSectionList"
 
     @reassignable_property
     def section_separator(self):
