@@ -1,3 +1,4 @@
+"""Utility functions and objects used throughout dryparse."""
 import ast
 import re
 import weakref
@@ -14,22 +15,27 @@ class _NoInit(type):
         return cls.__new__(cls, *args, **kwargs)
 
 
-def parse_str(text: str, type: type):
+def parse_str(text: str, target_type: type):
     """Parse string into primitive type ``type``."""
-    if type == str:
+    if target_type == str:
         return text
     obj = ast.literal_eval(text)
-    if isinstance(obj, type):
+    if isinstance(obj, target_type):
         return obj
-    else:
-        return type(text)
+    return target_type(text)
 
 
 def first_token_from_regex(regex: str) -> re.Pattern:
+    """
+    Get first valid token from regular expression ``regex``.
+
+    The first valid token is the smallest substring taken from the beginning of
+    ``regex`` that forms a valid regex by itself.
+    """
     for i in range(1, len(regex)):
         try:
             return re.compile(regex[0:i])
-        except:
+        except:  # pylint: disable=bare-except
             continue
     return re.compile(regex)
 
@@ -88,10 +94,11 @@ class reassignable_property:
         del self._instance_overrides[instance]
 
     @staticmethod
-    def deepcopy_func(cls: type):
+    def deepcopy_func(target_class: type):
         """
-        A utility function that will deepcopy an object of class ``cls`` in the
-        usual way, along with its reassignable properties.
+        A utility function that will deepcopy an object of class
+        ``target_class`` in the usual way, along with its reassignable
+        properties.
 
         Usage
         -----
@@ -112,16 +119,15 @@ class reassignable_property:
         Notes
         -----
         The copy operation performed by this function will honor the
-        implementations of ``__deepcopy__`` by the parent classes of ``cls``.
+        implementations of ``__deepcopy__`` by the parent classes of
+        ``target_class``.
         """
-        import copy as copy_module
+        import copy as copy_module  # pylint: disable=import-outside-toplevel
 
-        def _deepcopy(self_: cls, memo=None):
+        def _deepcopy(self_: target_class, memo=None):
             # TODO thread safety
             class NonExistent:
                 """Special marker value."""
-
-                pass
 
             # Create temporary snapshots of __copy__ and __deepcopy__ functions
             # on self_ and cls, and temporarily remove them from those objects,
@@ -131,9 +137,9 @@ class reassignable_property:
                 self_.__deepcopy__ = None
             else:
                 deepcopy = NonExistent
-            if hasattr(cls, "__deepcopy__"):
-                cls_deepcopy = cls.__deepcopy__
-                cls.__deepcopy__ = None
+            if hasattr(target_class, "__deepcopy__"):
+                cls_deepcopy = target_class.__deepcopy__
+                target_class.__deepcopy__ = None
             else:
                 cls_deepcopy = NonExistent
             if hasattr(self_, "__copy__"):
@@ -141,9 +147,9 @@ class reassignable_property:
                 self_.__copy__ = None
             else:
                 copy = NonExistent
-            if hasattr(cls, "__copy__"):
-                cls_copy = cls.__copy__
-                cls.__copy__ = None
+            if hasattr(target_class, "__copy__"):
+                cls_copy = target_class.__copy__
+                target_class.__copy__ = None
             else:
                 cls_copy = NonExistent
 
@@ -155,16 +161,17 @@ class reassignable_property:
             if deepcopy != NonExistent:
                 new.__deepcopy__ = deepcopy
             if cls_deepcopy != NonExistent:
-                cls.__deepcopy__ = cls_deepcopy
+                target_class.__deepcopy__ = cls_deepcopy
             if copy != NonExistent:
                 new.__copy__ = copy
             if cls_copy != NonExistent:
-                cls.__copy__ = cls_copy
+                target_class.__copy__ = cls_copy
 
             # Supplement the default deepcopy by copying reassignable
             # properties too.
-            for name in dir(cls):
-                prop = getattr(cls, name)
+            for name in dir(target_class):
+                # pylint: disable=protected-access
+                prop = getattr(target_class, name)
                 if (
                     not (name.startswith("__") and name.startswith("__"))
                     and isinstance(prop, reassignable_property)

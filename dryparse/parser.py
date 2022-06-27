@@ -1,3 +1,8 @@
+"""
+Functions for parsing the command line, i.e. converting command line
+arguments into their object representations.
+"""
+
 import re
 import sys
 from typing import Any, List, Optional, Tuple, Union
@@ -94,12 +99,10 @@ def parse_arg(
                 group = match.groups()[-1]
                 if group and opt.type == bool:
                     raise OptionDoesNotTakeArgumentsError(match[0])
-                else:
-                    value = group
-                return opt, value
+                return opt, group
 
     for cmd in Meta(command).subcommands:
         if re.fullmatch(Meta(cmd).regex, arg):
-            return cmd
+            return cmd, None
 
     return None, None

@@ -1,6 +1,9 @@
 [BASIC]
 variable-rgx=[a-z0-9_]{1,30}$
 
+[MASTER]
+ignore-paths=dryparse/_meta.py
+
 [FORMAT]
 max-line-length=79
 
@@ -14,4 +17,8 @@ disable=invalid-name,
         # This is just annoying
         global-statement,
         # We use generic Exceptions to generate CLI error messages
-        broad-except
+        broad-except,
+        # These don't make sense
+        too-many-instance-attributes,
+        too-few-public-methods,
+        too-many-arguments,

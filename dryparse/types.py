@@ -28,15 +28,21 @@ class Counter(OptionType):
 
     takes_argument = False
 
-    def __init__(self):
+    def __new__(cls, value: str):
+        # pylint: disable=super-init-not-called
         pass  # TODO
 
 
-class Bool(OptionType, bool):
+class Bool(OptionType):
     """
     A bool type that understands ``"true"``, ``"True"``, ``"false"``,
     ``"False"`` and empty string.
     """
 
-    def __init__(self):
-        pass
+    def __new__(cls, value: str):
+        if value in ("true", "True", "yes"):
+            return True
+        if value in ("false", "False", "no"):
+            return False
+
+        raise ValueError(value)

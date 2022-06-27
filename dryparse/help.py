@@ -1,7 +1,9 @@
+"""Help module for dryparse objects."""
+
 import copy
 import textwrap
 from io import StringIO
-from typing import Iterable, List, Optional, Union
+from typing import List, Optional, Union
 
 from dryparse.objects import Command, DryParseType, Group, Meta, Option
 from dryparse.util import reassignable_property
@@ -15,24 +17,29 @@ class _HelpMetaclass(type):
     _override_class = None
 
     @property
-    def override_class(self) -> Optional[type]:
+    def override_class(cls) -> Optional[type]:
         """
         Look at the documentation for this property in any class that has this
         as its metaclass.
         """
-        return self._override_class
+        return cls._override_class
 
     @override_class.setter
-    def override_class(self, cls: Optional[type]):
-        if not issubclass(cls, self.__class__):
+    def override_class(cls, target_class: Optional[type]):
+        if not issubclass(target_class, cls.__class__):
             raise TypeError("Argument cls must be a subclass of OptionHelp")
-        self._override_class = cls
+        cls._override_class = target_class
 
     # TODO override __call__ so an instance of the configured override_class is
     #  constructed instead of an instance of the given class.
 
 
-class DryParseHelpType(DryParseType):
+class DryParseHelpType(DryParseType):  # pylint: disable=too-few-public-methods
+    """
+    Common type for most objects in this module, providing a common deepcopy
+    implementation.
+    """
+
     def __deepcopy__(self, memo=None):
         return reassignable_property.deepcopy_func(self.__class__)(self, memo)
 
@@ -55,9 +62,10 @@ class Help(DryParseHelpType, metaclass=_HelpMetaclass):
     text: str
 
     def __str__(self):
-        return self.text
+        return self.text  # pylint: disable=no-member
 
     def __copy__(self):
+        _ = None  # prevents the method from being treated as abstract
         raise NotImplementedError
 
 
@@ -82,8 +90,7 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
                 if isinstance(attr, CommandDescription)
                 else CommandDescription(attr)
             )
-        else:
-            return super().__getattribute__(key)
+        return super().__getattribute__(key)
 
     @reassignable_property
     def signature(self):
@@ -98,13 +105,13 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
     signature: str
 
     @reassignable_property
-    def desc(self) -> "CommandDescription":
+    def desc(self) -> "CommandDescription":  # pylint: disable=no-self-use
         """
         Command description.
 
         You can assign this to be a ``str`` or :class:`CommandDescription`, but
-        you will always get a :class:`CommandDescription` when you try to access
-        this as an attribute.
+        you will always get a :class:`CommandDescription` when you try to
+        access this as an attribute.
         """
         return CommandDescription("")
 
@@ -123,7 +130,7 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
     sections: "HelpSectionList"
 
     @reassignable_property
-    def section_separator(self):
+    def section_separator(self):  # pylint: disable=no-self-use
         """Separator between sections of this help message."""
         return "\n\n"
 
@@ -135,6 +142,7 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
         Text that appears when this subcommand is listed as a subcommand in the
         help message of another command.
         """
+        # pylint: disable=no-member
         meta = Meta(self.command)
         return HelpEntry(meta.name, self.desc.brief).text
 
@@ -160,7 +168,7 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
         self.option = option
 
     @reassignable_property
-    def desc(self):
+    def desc(self):  # pylint: disable=no-self-use
         """Option description."""
         return ""
 
@@ -247,10 +255,13 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
 
     @reassignable_property
     def text(self):
+        # pylint: disable=no-member
         return HelpEntry(self.signature, self.desc).text
 
 
 class GroupHelp(Help, metaclass=_HelpMetaclass):
+    """Help for a :class:`~dryparse.objects.Group` object."""
+
     def __init__(self, group: AnyGroup):
         self.group = group
 
@@ -262,6 +273,8 @@ class GroupHelp(Help, metaclass=_HelpMetaclass):
 
 
 class HelpSection(DryParseHelpType):
+    """Help section, with a headline and content."""
+
     def __init__(self, name_or_group: Union[str, Group]):
         if isinstance(name_or_group, str):
             self.name = name_or_group
@@ -272,7 +285,7 @@ class HelpSection(DryParseHelpType):
             raise TypeError("`name_or_group` must be of type str or Group")
 
     @reassignable_property
-    def name(self) -> str:
+    def name(self) -> str:  # pylint: disable=no-self-use
         """Section name."""
         return ""
 
@@ -280,9 +293,11 @@ class HelpSection(DryParseHelpType):
 
     @reassignable_property
     def group(self) -> Optional[Group]:
+        """:class:`~dryparse.objects.Group` that this section refers to."""
+        # pylint: disable=no-self-use
         return None
 
-    group: str
+    group: Optional[Group]
 
     @reassignable_property
     def headline(self):
@@ -296,13 +311,14 @@ class HelpSection(DryParseHelpType):
     headline: str
 
     @reassignable_property
-    def content(self) -> str:
+    def content(self) -> str:  # pylint: disable=no-self-use
+        """Section content, excluding headline."""
         return ""
 
     content: str
 
     @reassignable_property
-    def indent(self):
+    def indent(self):  # pylint: disable=no-self-use
         """Indent for the content of this section."""
         return 2
 
@@ -315,12 +331,15 @@ class HelpSection(DryParseHelpType):
 
         Default value: ``True``
         """
+        # pylint: disable=no-member
         return bool(self.text)
 
     active: bool
 
     @reassignable_property
     def text(self):
+        """Entire help text."""
+        # pylint: disable=no-member
         return (
             self.headline
             + "\n"
@@ -330,11 +349,14 @@ class HelpSection(DryParseHelpType):
     text: str
 
     def __str__(self):
-        return self.text
+        return self.text  # pylint: disable=no-member
 
     def __repr__(self):
         cls = self.__class__
-        return f"<{cls.__module__}.{cls.__qualname__}[{repr(self.name)}] at {hex(id(self))}>"
+        return (
+            f"<{cls.__module__}.{cls.__qualname__}[{repr(self.name)}] "
+            f"at {hex(id(self))}>"
+        )
 
 
 class HelpSectionList(List[HelpSection], DryParseHelpType):
@@ -363,17 +385,15 @@ class HelpSectionList(List[HelpSection], DryParseHelpType):
     Commands:
     """
 
-    def __init__(self, iterable: Iterable = ()):
-        super().__init__(iterable)
-
     def __getitem__(self, item: Union[int, str, Group]):
+        # pylint: disable=no-else-return
         if isinstance(item, int):
             return super().__getitem__(item)
         elif isinstance(item, str):
             try:
                 return next((sec for sec in self if sec.name == item))
             except StopIteration:
-                raise KeyError(item)
+                raise KeyError(item)  # pylint: disable=raise-missing-from
         elif isinstance(item, Group):
             return next((sec for sec in self if sec.group == item))
         else:
@@ -410,7 +430,7 @@ class HelpEntry(DryParseHelpType):
         self.desc = desc
 
     @reassignable_property
-    def signature_width(self):
+    def signature_width(self):  # pylint: disable=no-self-use
         """
         Width of signature after padding.
 
@@ -425,16 +445,18 @@ class HelpEntry(DryParseHelpType):
         """
         Option signature padded until :attr:`signature_width`.
         """
+        # pylint: disable=no-member
         return self.signature.ljust(self.signature_width, " ")
 
     padded_signature: str
 
     @reassignable_property
     def text(self):
+        """Entire help text for this entry."""
+        # pylint: disable=no-member
         if self.desc:
             return self.padded_signature + self.desc
-        else:
-            return self.signature
+        return self.signature
 
     text: str
 
@@ -480,6 +502,8 @@ class _CommandHelpSectionList(HelpSectionList):
         self.options = self.OptionsSection(command)
 
     class DescSection(HelpSection):
+        """Standard description section for a command."""
+
         __slots__ = ("command",)
 
         def __init__(self, command: Command):
@@ -489,15 +513,18 @@ class _CommandHelpSectionList(HelpSectionList):
 
         @reassignable_property
         def text(self):
+            """Entire help text."""
             return Meta(self.command).help.desc.long
 
         def __str__(self):
-            return self.text
+            return self.text  # pylint: disable=no-member
 
         def __repr__(self):
             return object.__repr__(self)
 
     class UsageSection(HelpSection):
+        """Standard usage section for a command."""
+
         __slots__ = ("command",)
 
         def __init__(self, command: Command):
@@ -506,6 +533,7 @@ class _CommandHelpSectionList(HelpSectionList):
 
         @reassignable_property
         def text(self):
+            """Entire help text."""
             meta = Meta(self.command)
             out = StringIO()
             print(
@@ -517,12 +545,14 @@ class _CommandHelpSectionList(HelpSectionList):
             return out.getvalue()
 
         def __str__(self):
-            return self.text
+            return self.text  # pylint: disable=no-member
 
         def __repr__(self):
             return object.__repr__(self)
 
     class CommandsSection(HelpSection):
+        """Standard section containing subcommands for a command."""
+
         __slots__ = ("command",)
 
         def __init__(self, command: Command):
@@ -542,6 +572,8 @@ class _CommandHelpSectionList(HelpSectionList):
             return bool(meta.subcommands)
 
     class OptionsSection(HelpSection):
+        """Standard section containing options for a command."""
+
         __slots__ = ("command",)
 
         def __init__(self, command: Command):

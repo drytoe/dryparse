@@ -23,6 +23,7 @@ class Group(DryParseType):
 
     def __init__(self, name: str):
         self.name = name
+        # pylint: disable=import-outside-toplevel,cyclic-import
         from .help import GroupHelp
 
         self.help = GroupHelp(self)
@@ -52,18 +53,20 @@ class Option(DryParseType):
         long: str = "",
         argname: str = None,
         default=None,
-        type: type = bool,
+        argtype: type = bool,
         desc: str = None,
     ):
         if not (short or long):
             raise ValueError("An option must have short or long text")
         self.short = short
         self.long = long
-        self.type = type
+        self.type = argtype
         if default:
             self.value = default
         else:
             self.value = None
+
+        # pylint: disable=import-outside-toplevel,cyclic-import
         from .help import OptionHelp
 
         self.help = OptionHelp(self)
@@ -105,6 +108,7 @@ class Option(DryParseType):
         2. If the signature is `build(self, arg, **kwargs)`, the option can be
            specified as `--option ARG`
         """
+        _ = option  # TODO
         self.value = True
 
 
@@ -188,6 +192,7 @@ class Arguments(DryParseType):
             if flexible_pattern_found:
                 raise PatternAfterFlexiblePatternError
             if isinstance(item, tuple):
+                # pylint: disable=no-else-raise
                 if len(item) != 2:
                     raise InvalidArgumentPatternError
                 elif isinstance(item[1], (_EllipsisType, range)):
@@ -215,12 +220,18 @@ class Arguments(DryParseType):
         If the conversion of any of the arguments throws an exception, the
         conversion (and validation) will fail. (TODO exception)
         """
+        # pylint: disable=too-many-branches
+
         converted_args = []
         flexible_pattern: Union[Tuple[_EllipsisType, range], None] = None
         arg_index = 0
+        pattern: Arguments._PatternItem
 
         def msg_expected_more_input_args(pattern_: Arguments._PatternItem):
-            f"Pattern {self._pattern_item_to_str(pattern_)} expected more input arguments"
+            return (
+                f"Pattern {self._pattern_item_to_str(pattern_)} "
+                f"expected more input arguments"
+            )
 
         def raise_type_conversion_error(
             original_err: Exception,
@@ -244,9 +255,11 @@ class Arguments(DryParseType):
                 break
 
             if isinstance(pattern, type):
+                pattern: type
                 try:
                     arg = args[arg_index]
                 except IndexError:
+                    # pylint: disable=raise-missing-from
                     raise ArgumentConversionError(
                         msg_expected_more_input_args(pattern)
                     )
@@ -305,56 +318,21 @@ class Arguments(DryParseType):
         The arguments are converted and validated using :meth:`convert` to
         conform to :attr:`pattern`.
         """
+        # pylint: disable=attribute-defined-outside-init
         self._args = self.convert(args)
 
     def __iter__(self):
         return iter(self._args)
 
     @staticmethod
-    def _min_num_of_args(pattern_item: _PatternItem):
-        if isinstance(pattern_item, type):
-            return 1
-        else:
-            number = pattern_item[1]
-            if isinstance(number, int):
-                return number
-            if isinstance(number, _EllipsisType):
-                return 0
-            if isinstance(number, range):
-                return number.start
-
-    @staticmethod
-    def _max_num_of_args(pattern_item: _PatternItem):
-        if isinstance(pattern_item, type):
-            return 1
-        else:
-            number = pattern_item[1]
-            if isinstance(number, int):
-                return number
-            if isinstance(number, _EllipsisType):
-                return 999999999
-            if isinstance(number, range):
-                return number.stop
-
-    @staticmethod
     def _pattern_item_to_str(pattern_item: _PatternItem):
+        # pylint: disable=no-else-return
         if isinstance(pattern_item, type):
             return pattern_item.__name__
-        if isinstance(pattern_item, tuple):
+        elif isinstance(pattern_item, tuple):
             return f"({', '.join(str(pattern_item))})"
-
-    class _PatternItemWrapper:
-        """
-        TODO delete
-        An instance of this class wraps a single CLI argument, using its index
-        when creating a hash of itself. This is used so that equal arguments.
-        """
-
-        def __init__(self, pattern_item: "Arguments._PatternItem", index: int):
-            pass
-
-        def __hash__(self):
-            pass
+        else:
+            raise TypeError(pattern_item)
 
 
 class Command(DryParseType):
@@ -386,6 +364,7 @@ class Command(DryParseType):
         Execute the command. Unless overridden, this will process special
         options like help and version, and handle subcommands.
         """
+        # pylint: disable=redefined-builtin
         if help or (help is None and hasattr(self, "help") and self.help):
             print(Meta(self).help.text)
         else:
@@ -448,7 +427,8 @@ class ParsedCommand(Command):
     """
 
     def __init__(self, command: Command):
-        _ = command  # prevents 'unused' warning
+        # pylint: disable=unused-argument
+        # pylint: disable=super-init-not-called
         pass
 
     def __new__(cls, command: Command):
@@ -523,6 +503,7 @@ class Meta(DryParseType, metaclass=_NoInit):
         self.arguments = None
         self.name = ""
         self.regex = ""
+        # pylint: disable=import-outside-toplevel,cyclic-import
         from .help import CommandHelp
 
         self.help = CommandHelp(command)
@@ -535,10 +516,14 @@ class Meta(DryParseType, metaclass=_NoInit):
             meta.__init__(command)
             return meta
 
-    def call(self, *args, **kwargs):
-        pass
+    def call(self, *args, **kwargs):  # pylint: disable=method-hidden
+        """Callback function for when this command is invoked."""
 
     def set_callback(self, func: Callable[[Command], Any]):
+        """
+        Set the callback function to be called when this command is
+        invoked.
+        """
         self.call = func
 
     def _copy_to(self, destination: "Meta", memo=None):

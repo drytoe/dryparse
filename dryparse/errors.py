@@ -1,5 +1,9 @@
+"""All errors that can be raised directly by dryparse."""
+
 # TODO write error messages for each exception
-from typing import List, Sequence
+from typing import Sequence
+
+# pylint: disable=missing-class-docstring
 
 
 class DryParseError(Exception):
@@ -19,9 +23,9 @@ class OptionDoesNotTakeArgumentsError(DryParseError):
 
 
 class OptionArgumentTypeConversionError(DryParseError):
-    def __init__(self, argument: str = None, type: type = None):
+    def __init__(self, argument: str = None, argtype: type = None):
         self.argument = argument
-        self.type = type
+        self.type = argtype
         super().__init__()
 
 
@@ -33,7 +37,8 @@ class InvalidArgumentPatternError(DryParseError):
 class PatternAfterFlexiblePatternError(DryParseError):
     def __init__(self):
         super().__init__(
-            "There can be no argument patterns after a (type, ...)-style or (type, range)-style pattern"
+            "There can be no argument patterns after a (type, ...)-style or "
+            "(type, range)-style pattern"
         )
 
 
@@ -53,7 +58,7 @@ class ArgumentConversionError(DryParseError):
                 + ", ".join(map(str, arguments))
             )
         if index:
-            msg += "\n  Index: " + index
+            msg += f"\n  Index: {index}"
         self.arguments = arguments
         self.index = index
         super().__init__(msg)
@@ -62,7 +67,8 @@ class ArgumentConversionError(DryParseError):
 class VariadicKwargsNotAllowedError(DryParseError):
     def __init__(self):
         super().__init__(
-            "**kwargs is not allowed in a decorator-style defintion of a command"
+            "**kwargs is not allowed in a decorator-style defintion of a "
+            "command"
         )
 
 
