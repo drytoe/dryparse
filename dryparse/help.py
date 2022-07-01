@@ -538,7 +538,7 @@ class _CommandHelpSectionList(HelpSectionList):
             out = StringIO()
             print(
                 f"Usage: {meta.name}",
-                " ".join(opt.help.hint for opt in meta.options),
+                " ".join(opt.help.hint for opt in meta.options.values()),
                 file=out,
                 end="",
             )
@@ -563,7 +563,9 @@ class _CommandHelpSectionList(HelpSectionList):
         def content(self):
             meta = Meta(self.command)
             return "\n".join(
-                tuple(Meta(cmd).help.listing for cmd in meta.subcommands)
+                tuple(
+                    Meta(cmd).help.listing for cmd in meta.subcommands.values()
+                )
             )
 
         @reassignable_property
@@ -583,7 +585,9 @@ class _CommandHelpSectionList(HelpSectionList):
         @reassignable_property
         def content(self):
             meta = Meta(self.command)
-            return "\n".join(tuple(opt.help.text for opt in meta.options))
+            return "\n".join(
+                tuple(opt.help.text for opt in meta.options.values())
+            )
 
         @reassignable_property
         def active(self):

@@ -2,18 +2,20 @@
 Functions for parsing the command line, i.e. converting command line
 arguments into their object representations.
 """
-
+import copy
 import re
 import sys
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Iterable, List, Optional, Tuple, Union
 
 from . import util
 from .context import Context
 from .errors import (
+    NotEnoughPositionalArgumentsError,
     OptionDoesNotTakeArgumentsError,
     OptionRequiresArgumentError,
+    TooManyPositionalArgumentsError,
 )
-from .objects import Command, Meta, Option, ParsedCommand
+from .objects import Arguments, Command, Meta, Option, ParsedCommand
 
 
 def parse(command: Command, args: List[str] = None):
@@ -22,6 +24,7 @@ def parse(command: Command, args: List[str] = None):
 
     If unspecified, ``args`` will fall back to ``sys.argv``.
     """
+    cmd = copy.deepcopy(command)
     if args is None:
         args = sys.argv
     with Context() as context:
@@ -38,7 +41,7 @@ def parse(command: Command, args: List[str] = None):
                 option.value = util.parse_str(arg, option.type)
                 waiting_for_option_value = False
                 continue
-            token, value = parse_arg(command, arg)
+            token, value = parse_arg(cmd, arg)
             if isinstance(token, Option):
                 option = token
                 if value is not None and option.type != bool:
@@ -53,13 +56,24 @@ def parse(command: Command, args: List[str] = None):
                     option_str = arg
             elif isinstance(token, Command):
                 parse(token, args[i:])
+                return ParsedCommand(cmd, deepcopy=False)
             else:
                 positional_args.append(arg)
 
         if waiting_for_option_value:
             raise OptionRequiresArgumentError(option_str)
 
-    return ParsedCommand(command)
+        parsed_arg_count = _distribute_args_into_buckets(
+            positional_args, Meta(cmd).argument_aliases.values()
+        )
+
+        # Put all positional argument into cmd's arguments of type `Arguments`
+        if parsed_arg_count > len(positional_args):
+            raise NotEnoughPositionalArgumentsError
+        if parsed_arg_count < len(positional_args):
+            raise TooManyPositionalArgumentsError
+
+    return ParsedCommand(cmd, deepcopy=False)
 
 
 def parse_arg(
@@ -88,7 +102,7 @@ def parse_arg(
       name is specified as one argument and the option value as another
       argument.
     """
-    for opt in Meta(command).options:
+    for opt in Meta(command).options.values():
         long_re = "^" + opt.long + "(=(.+))?$"
         short_re = "^" + opt.short + "(.+)?"
 
@@ -101,8 +115,25 @@ def parse_arg(
                     raise OptionDoesNotTakeArgumentsError(match[0])
                 return opt, group
 
-    for cmd in Meta(command).subcommands:
+    for cmd in Meta(command).subcommands.values():
         if re.fullmatch(Meta(cmd).regex, arg):
             return cmd, None
 
     return None, None
+
+
+def _distribute_args_into_buckets(
+    args: List[str], arg_buckets: Iterable[Arguments]
+):
+    """
+    Returns
+    -------
+    Number of arguments that were successfully distributed.
+    """
+    arg_index = 0
+    for arg_bucket in arg_buckets:
+        arg_bucket: Arguments
+        converted = arg_bucket.assign(args[arg_index:], allow_extra_args=True)
+        arg_index += len(converted)
+
+    return arg_index

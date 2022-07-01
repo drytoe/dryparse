@@ -77,3 +77,25 @@ class ValueConversionError(DryParseError):
         super().__init__(
             "Error while converting CLI string to python representation"
         )
+
+
+class CallbackDoesNotSupportAllArgumentsError(DryParseError):
+    def __init__(self):
+        super().__init__(
+            "Callback function does not support arguments passed to it: "
+        )
+
+
+class NotEnoughPositionalArgumentsError(DryParseError):
+    def __init__(self):
+        super().__init__("Not enough positional arguments for command")
+
+
+class TooManyPositionalArgumentsError(DryParseError):
+    def __init__(self):
+        super().__init__("Too many positional arguments for command")
+
+
+class ReadOnlyAttributeError(DryParseError):
+    def __init__(self, name: str):
+        super().__init__(f"Attribute is read-only: {name}")

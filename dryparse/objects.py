@@ -1,15 +1,19 @@
 """Object model of a command line program."""
 import copy
 import inspect
+import typing
+from collections import OrderedDict
 from typing import Any, Callable, List, NoReturn, Sequence, Tuple, Union
 from weakref import WeakKeyDictionary
 
-from dryparse.errors import (
+from ._util import deepcopy_like_parent
+from .errors import (
     ArgumentConversionError,
     InvalidArgumentPatternError,
     PatternAfterFlexiblePatternError,
+    ReadOnlyAttributeError,
 )
-from dryparse.util import _NoInit
+from .util import _NoInit, verify_function_callable
 
 _EllipsisType = type(Ellipsis)
 
@@ -210,8 +214,11 @@ class Arguments(DryParseType):
             elif not isinstance(item, type):
                 raise InvalidArgumentPatternError
         self.pattern = pattern
+        self.values = []
 
-    def convert(self, args: Sequence[str]) -> Union[List[Any], Any]:
+    def convert(
+        self, args: Sequence[str], allow_extra_args=False
+    ) -> Union[List[Any], Any]:
         """
         Convert (and consequently validate) a list of ``args`` that were
         possibly specified on the command line to a list of arguments
@@ -219,7 +226,68 @@ class Arguments(DryParseType):
 
         If the conversion of any of the arguments throws an exception, the
         conversion (and validation) will fail. (TODO exception)
+
+        If the pattern only expects one argument, then the single parsed
+        argument will be returned, instead of a list with one element.
+
+        Parameters
+        ----------
+        args
+            Arguments to convert.
+        allow_extra_args
+            Do not raise an exception if there are more ``args`` than can fit
+            into ``self.pattern``.
         """
+
+        converted_args = self._convert(args, allow_extra_args=allow_extra_args)
+
+        # If the pattern only has one argument (e.g. `Arguments(int)`), then
+        # return the single parsed argument instead of a list of one element
+        if len(self.pattern) == 1 and (
+            isinstance(self.pattern[0], type)
+            or isinstance(self.pattern[0], tuple)
+            and self.pattern[0][1] == 1
+        ):
+            return converted_args[0]
+        return converted_args
+
+    def assign(self, args: List[str], allow_extra_args=False):
+        """
+        Assign a set of arguments specified on the command line to be held by
+        this instance.
+
+        The arguments are converted and validated using :meth:`convert` in
+        order to conform to :attr:`pattern`.
+
+        Parameters
+        ----------
+        allow_extra_args
+            See :meth:`convert`.
+
+        Returns
+        -------
+        The converted arguments.
+        """
+        # pylint: disable=attribute-defined-outside-init
+        self.values = self._convert(args, allow_extra_args=allow_extra_args)
+        return self.values
+
+    def __iter__(self):
+        return iter(self.values)
+
+    @staticmethod
+    def _pattern_item_to_str(pattern_item: _PatternItem):
+        # pylint: disable=no-else-return
+        if isinstance(pattern_item, type):
+            return pattern_item.__name__
+        elif isinstance(pattern_item, tuple):
+            return f"({', '.join(str(pattern_item))})"
+        else:
+            raise TypeError(pattern_item)
+
+    def _convert(
+        self, args: Sequence[str], allow_extra_args=False
+    ) -> Union[List[Any], Any]:
         # pylint: disable=too-many-branches
 
         converted_args = []
@@ -299,40 +367,10 @@ class Arguments(DryParseType):
                         f"Wrong number of input args for pattern: "
                         f"{self._pattern_item_to_str(self.pattern[-1])}"
                     )
-        elif len(args) - arg_index > 0:
+        elif len(args) - arg_index > 0 and not allow_extra_args:
             raise ArgumentConversionError("Too many input arguments")
 
-        if len(self.pattern) == 1 and (
-            isinstance(self.pattern[0], type)
-            or isinstance(self.pattern[0], tuple)
-            and self.pattern[0][1] == 1
-        ):
-            return converted_args[0]
         return converted_args
-
-    def assign(self, args: List[str]):
-        """
-        Assign a set of arguments specified on the command line to be held by
-        this instance.
-
-        The arguments are converted and validated using :meth:`convert` to
-        conform to :attr:`pattern`.
-        """
-        # pylint: disable=attribute-defined-outside-init
-        self._args = self.convert(args)
-
-    def __iter__(self):
-        return iter(self._args)
-
-    @staticmethod
-    def _pattern_item_to_str(pattern_item: _PatternItem):
-        # pylint: disable=no-else-return
-        if isinstance(pattern_item, type):
-            return pattern_item.__name__
-        elif isinstance(pattern_item, tuple):
-            return f"({', '.join(str(pattern_item))})"
-        else:
-            raise TypeError(pattern_item)
 
 
 class Command(DryParseType):
@@ -365,18 +403,25 @@ class Command(DryParseType):
         options like help and version, and handle subcommands.
         """
         # pylint: disable=redefined-builtin
+        meta = Meta(self)
         if help or (help is None and hasattr(self, "help") and self.help):
-            print(Meta(self).help.text)
+            print(meta.help.text)
         else:
-            Meta(self).call(self, *args, help=help, **kwargs)
+            verify_function_callable(
+                meta.call, self, *args, help=help, **kwargs
+            )
+            meta.call(self, *args, help=help, **kwargs)
 
     def __setattr__(self, name, value):
         if isinstance(value, Option):
             super().__setattr__(name, value)
-            Meta(self).options.append(value)
+            Meta(self).options[name] = value
         elif isinstance(value, Command):
             super().__setattr__(name, value)
-            Meta(self).subcommands.append(value)
+            Meta(self).subcommands[name] = value
+        elif isinstance(value, Arguments):
+            super().__setattr__(name, value)
+            Meta(self).argument_aliases[name] = value
         else:
             try:
                 attr = super().__getattribute__(name)
@@ -392,17 +437,29 @@ class Command(DryParseType):
         return copy.deepcopy(self)
 
     def __deepcopy__(self, memo=None):
-        new = copy.deepcopy(super(), memo)
+        new = deepcopy_like_parent(self, memo)
         new.__class__ = self.__class__
-        Meta(self)._copy_to(Meta(new), memo)
+        subcommands = {
+            k: new.__getattribute__(k) for k in Meta(self).subcommands
+        }
+        argument_aliases = {
+            k: new.__getattribute__(k) for k in Meta(self).argument_aliases
+        }
+        options = {k: new.__getattribute__(k) for k in Meta(self).options}
+        Meta(self)._copy_to(
+            Meta(new), options, subcommands, argument_aliases, memo=memo
+        )
+
         return new
 
     def __delattr__(self, name):
         value = super().__getattribute__(name)
         if isinstance(value, Option):
-            Meta(self).options.remove(value)
+            del Meta(self).options[name]
         elif isinstance(value, Command):
-            Meta(self).subcommands.remove(value)
+            del Meta(self).subcommands[name]
+        elif isinstance(value, Arguments):
+            del Meta(self).argument_aliases[name]
         super().__delattr__(name)
 
 
@@ -426,30 +483,39 @@ class ParsedCommand(Command):
     NON_DEFAULT
     """
 
-    def __init__(self, command: Command):
+    def __init__(self, command: Command, deepcopy=True):
         # pylint: disable=unused-argument
         # pylint: disable=super-init-not-called
-        pass
+        """
+        Parameters
+        ----------
+        copy
+            Create a deep copy of the command. If False, ``command`` will be
+            modified to be a ``ParsedCommand`` instead of a regular one.
+        """
 
-    def __new__(cls, command: Command):
-        parsed_cmd = copy.deepcopy(command)
+    def __new__(cls, command: Command, deepcopy=True):
+        if deepcopy:
+            cmd = copy.deepcopy(command)
+        else:
+            cmd = command
         # Matches any of the `Command` subclasses defined in this module
         if command.__module__ == cls.__module__:
-            parsed_cmd.__class__ = ParsedCommand
+            cmd.__class__ = ParsedCommand
         else:
             # All bases that are subclasses of `Command` and were defined in
             # this module (not by the dryparse library user) are replaced by
             # `ParsedCommand`.
-            parsed_cmd.__bases__ = type(parsed_cmd.__bases__)(
+            cmd.__bases__ = type(cmd.__bases__)(
                 (
                     base
                     if not isinstance(base, Command)
                     and base.__module__ == cls.__module__
                     else ParsedCommand
                 )
-                for base in parsed_cmd.__bases__
+                for base in cmd.__bases__
             )
-        return parsed_cmd
+        return cmd
 
     def __getattribute__(self, name):
         """
@@ -492,15 +558,25 @@ class Meta(DryParseType, metaclass=_NoInit):
     """
     Meta wrapper for :class:`Command` that can be used to access special
     attributes of :class:`Command`.
+
+    Notes
+    -----
+    - Do not modify the ``options``, ``command``, ``subcommands`` and
+    ``argument_aliases`` attributes.
     """
 
     _command_to_meta_map = WeakKeyDictionary()
 
+    options: typing.OrderedDict[str, Option]
+    command: Command
+    subcommands: typing.OrderedDict[str, Command]
+    argument_aliases: typing.OrderedDict[str, Arguments]
+
     def __init__(self, command: Command):
-        self.options: List[Option] = []
-        self.command = command
-        self.subcommands: List[Command] = []
-        self.arguments = None
+        self.__setattr__("options", OrderedDict(), internal_call=True)
+        self.__setattr__("command", command, internal_call=True)
+        self.__setattr__("subcommands", OrderedDict(), internal_call=True)
+        self.__setattr__("argument_aliases", OrderedDict(), internal_call=True)
         self.name = ""
         self.regex = ""
         # pylint: disable=import-outside-toplevel,cyclic-import
@@ -516,6 +592,17 @@ class Meta(DryParseType, metaclass=_NoInit):
             meta.__init__(command)
             return meta
 
+    def __setattr__(self, key, value, internal_call=False):
+        if not internal_call and key in (
+            "options",
+            "command",
+            "subcommands",
+            "argument_aliases",
+        ):
+            raise ReadOnlyAttributeError(key)
+
+        super().__setattr__(key, value)
+
     def call(self, *args, **kwargs):  # pylint: disable=method-hidden
         """Callback function for when this command is invoked."""
 
@@ -523,14 +610,30 @@ class Meta(DryParseType, metaclass=_NoInit):
         """
         Set the callback function to be called when this command is
         invoked.
+
+        When the command is parsed, the callback will be called with all the
+        CLI arguments passed as arguments to the callback.
         """
         self.call = func
 
-    def _copy_to(self, destination: "Meta", memo=None):
+    def _copy_to(
+        self,
+        destination: "Meta",
+        options,
+        subcommands,
+        argument_aliases,
+        memo=None,
+    ):
         """Perform a deep copy from ``self`` to ``destination``."""
-        destination.options = copy.deepcopy(self.options, memo=memo)
-        destination.subcommands = copy.deepcopy(self.subcommands, memo=memo)
-        destination.arguments = self.arguments
+        destination.__setattr__(
+            "options",
+            options,
+            internal_call=True,
+        )
+        destination.__setattr__("subcommands", subcommands, internal_call=True)
+        destination.__setattr__(
+            "argument_aliases", argument_aliases, internal_call=True
+        )
         destination.name = self.name
         destination.regex = self.regex
         destination.help = copy.deepcopy(self.help, memo=memo)

@@ -4,6 +4,9 @@ import re
 import weakref
 from typing import Any, Callable
 
+from dryparse._util import deepcopy_like_parent
+from dryparse.errors import CallbackDoesNotSupportAllArgumentsError
+
 
 class _NoInit(type):
     """
@@ -122,51 +125,10 @@ class reassignable_property:
         implementations of ``__deepcopy__`` by the parent classes of
         ``target_class``.
         """
-        import copy as copy_module  # pylint: disable=import-outside-toplevel
+        import copy  # pylint: disable=import-outside-toplevel
 
         def _deepcopy(self_: target_class, memo=None):
-            # TODO thread safety
-            class NonExistent:
-                """Special marker value."""
-
-            # Create temporary snapshots of __copy__ and __deepcopy__ functions
-            # on self_ and cls, and temporarily remove them from those objects,
-            # so their default functionality can be used.
-            if hasattr(self_, "__deepcopy__"):
-                deepcopy = self_.__deepcopy__
-                self_.__deepcopy__ = None
-            else:
-                deepcopy = NonExistent
-            if hasattr(target_class, "__deepcopy__"):
-                cls_deepcopy = target_class.__deepcopy__
-                target_class.__deepcopy__ = None
-            else:
-                cls_deepcopy = NonExistent
-            if hasattr(self_, "__copy__"):
-                copy = self_.__copy__
-                self_.__copy__ = None
-            else:
-                copy = NonExistent
-            if hasattr(target_class, "__copy__"):
-                cls_copy = target_class.__copy__
-                target_class.__copy__ = None
-            else:
-                cls_copy = NonExistent
-
-            # Create the deep copy
-            new = copy_module.deepcopy(self_, memo)
-
-            # Restore __copy__ and __deepcopy__ functions to their versions
-            # from the snapshot
-            if deepcopy != NonExistent:
-                new.__deepcopy__ = deepcopy
-            if cls_deepcopy != NonExistent:
-                target_class.__deepcopy__ = cls_deepcopy
-            if copy != NonExistent:
-                new.__copy__ = copy
-            if cls_copy != NonExistent:
-                target_class.__copy__ = cls_copy
-
+            new = deepcopy_like_parent(self_, memo)
             # Supplement the default deepcopy by copying reassignable
             # properties too.
             for name in dir(target_class):
@@ -177,10 +139,28 @@ class reassignable_property:
                     and isinstance(prop, reassignable_property)
                     and self_ in prop._instance_overrides
                 ):
-                    prop._instance_overrides[new] = copy_module.deepcopy(
+                    prop._instance_overrides[new] = copy.deepcopy(
                         prop._instance_overrides[self_]
                     )
 
             return new
 
         return _deepcopy
+
+
+def verify_function_callable(func, *args, **kwargs):
+    """
+    Verify if ``func(*args, **kwargs)`` is a valid call without actually
+    calling the function. If yes, do nothing, else raise an exception.
+
+    Raises
+    ------
+    dryparse.errors.CallbackDoesNotSupportAllArgumentsError
+        If the verification fails.
+    """
+    from inspect import Signature  # pylint: disable=import-outside-toplevel
+
+    try:
+        Signature.from_callable(func).bind(*args, **kwargs)
+    except TypeError as e:
+        raise CallbackDoesNotSupportAllArgumentsError from e

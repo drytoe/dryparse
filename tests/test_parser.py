@@ -1,6 +1,9 @@
 import textwrap
 
+import pytest
+
 from dryparse import Command, parse
+from dryparse.errors import CallbackDoesNotSupportAllArgumentsError
 from dryparse.objects import (
     Option,
     RootCommand,
@@ -9,6 +12,23 @@ from dryparse.objects import (
     ParsedCommand,
 )
 from dryparse.parser import parse_arg
+
+
+def create_simple_command():
+    cmd = Command("test")
+    cmd.opt1 = Option("-1", "--opt1", default="opt1_default")
+    cmd.opt2 = Option("-2", "--opt2", default="opt2_default", argtype=int)
+    cmd.args = Arguments(bool, int)
+    return cmd
+
+
+def create_command_class():
+    class MyCommand(Command):
+        opt1 = Option("-1", "--opt1", default="opt1_default")
+        opt2 = Option("-2", "--opt2", default="opt2_default", argtype=int)
+        args = Arguments(bool, int)
+
+    return MyCommand
 
 
 class TestParser:
@@ -22,7 +42,7 @@ class TestParser:
 
     def test_parse_option_string(self):
         cmd = Command("test")
-        cmd.output = Option("-o", "--output", type=str)
+        cmd.output = Option("-o", "--output", argtype=str)
         opt, value = parse_arg(cmd, "-ofile1")
         assert isinstance(opt, Option) and value == "file1"
         opt, value = parse_arg(cmd, "--output=file2")
@@ -31,7 +51,7 @@ class TestParser:
     def test_parse_command_with_options(self):
         cmd = Command("test")
         cmd.random = Option("-r", "--random")
-        cmd.output = Option("-o", "--output", type=str)
+        cmd.output = Option("-o", "--output", argtype=str)
         args = [
             "test",
             "-r",
@@ -47,8 +67,8 @@ class TestParser:
         random = Option("-r", "--random")
         cmd.random = random
         random.help.signature = "--random, -r"
-        cmd.output = Option("-o", "--output", type=str, desc="output file")
-        cmd.config = Option(long="--config", type=str, argname="FILE")
+        cmd.output = Option("-o", "--output", argtype=str, desc="output file")
+        cmd.config = Option(long="--config", argtype=str, argname="FILE")
         args = ["test", "-h", "--random", "positional"]
 
         cmd = parse(cmd, args)
@@ -68,14 +88,11 @@ class TestParser:
         assert not cap.err
 
     def test_simple_command(self):
-        cmd = Command("test")
-        cmd.opt1 = Option("-1", "--opt1", default="opt1_default")
-        cmd.opt2 = Option("-2", "--opt2", default="opt2_default", type=int)
-        cmd.args = Arguments(bool, int)
-
         callback_called = False
 
-        def callback(self_: ParsedCommand):
+        cmd = create_simple_command()
+
+        def callback(self_: ParsedCommand, *_, **__):
             nonlocal callback_called
             callback_called = True
             assert self_.opt1 == "opt1_default"
@@ -85,6 +102,21 @@ class TestParser:
         cmd()
 
         assert callback_called
+
+    def test_invalid_callback_func(self):
+        cmd = create_simple_command()
+        del cmd.help
+        meta = Meta(cmd)
+
+        with pytest.raises(CallbackDoesNotSupportAllArgumentsError):
+            meta.set_callback(lambda: ...)
+            cmd()
+        with pytest.raises(CallbackDoesNotSupportAllArgumentsError):
+            meta.set_callback(lambda x, z=1: ...)
+            cmd(1, 2, 3)
+        with pytest.raises(CallbackDoesNotSupportAllArgumentsError):
+            meta.set_callback(lambda z=1: ...)
+            cmd(1)
 
 
 class TestFakeDocker:
@@ -99,6 +131,9 @@ class TestFakeDocker:
         cls.cmd.run = run = Command(
             "run", desc="Run a command in a new container"
         )
+        cls.cmd.run.image = Arguments(str)
+        cls.cmd.run.command = Arguments(str)
+        cls.cmd.run.cmd_args = Arguments((str, ...))
         run.interactive = Option(
             "-i", "--interactive", desc="Keep STDIN open even if not attached"
         )
@@ -106,3 +141,4 @@ class TestFakeDocker:
 
     def test_help(self, capfd):
         cmd = parse(self.cmd, ["/usr/bin/docker", "-D", "run", "TODO"])
+        cmd
