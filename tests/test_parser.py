@@ -9,7 +9,7 @@ from dryparse.objects import (
     RootCommand,
     Arguments,
     Meta,
-    ParsedCommand,
+    ResolvedCommand,
 )
 from dryparse.parser import parse_arg
 
@@ -92,7 +92,7 @@ class TestParser:
 
         cmd = create_simple_command()
 
-        def callback(self_: ParsedCommand, *_, **__):
+        def callback(self_: ResolvedCommand, *_, **__):
             nonlocal callback_called
             callback_called = True
             assert self_.opt1 == "opt1_default"

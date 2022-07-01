@@ -15,7 +15,7 @@ from .errors import (
     OptionRequiresArgumentError,
     TooManyPositionalArgumentsError,
 )
-from .objects import Arguments, Command, Meta, Option, ParsedCommand
+from .objects import Arguments, Command, Meta, Option, ResolvedCommand
 
 
 def parse(command: Command, args: List[str] = None):
@@ -56,7 +56,7 @@ def parse(command: Command, args: List[str] = None):
                     option_str = arg
             elif isinstance(token, Command):
                 parse(token, args[i:])
-                return ParsedCommand(cmd, deepcopy=False)
+                return ResolvedCommand(cmd, deepcopy=False)
             else:
                 positional_args.append(arg)
 
@@ -73,7 +73,7 @@ def parse(command: Command, args: List[str] = None):
         if parsed_arg_count < len(positional_args):
             raise TooManyPositionalArgumentsError
 
-    return ParsedCommand(cmd, deepcopy=False)
+    return ResolvedCommand(cmd, deepcopy=False)
 
 
 def parse_arg(

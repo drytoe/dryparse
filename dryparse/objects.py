@@ -438,17 +438,7 @@ class Command(DryParseType):
 
     def __deepcopy__(self, memo=None):
         new = deepcopy_like_parent(self, memo)
-        new.__class__ = self.__class__
-        subcommands = {
-            k: new.__getattribute__(k) for k in Meta(self).subcommands
-        }
-        argument_aliases = {
-            k: new.__getattribute__(k) for k in Meta(self).argument_aliases
-        }
-        options = {k: new.__getattribute__(k) for k in Meta(self).options}
-        Meta(self)._copy_to(
-            Meta(new), options, subcommands, argument_aliases, memo=memo
-        )
+        Meta(self)._copy_to(Meta(new), memo=memo)
 
         return new
 
@@ -463,7 +453,7 @@ class Command(DryParseType):
         super().__delattr__(name)
 
 
-class ParsedCommand(Command):
+class ResolvedCommand(Command):
     """
     Wrapper around :class:`Command` that provides access to option values as if
     they were regular attributes.
@@ -473,8 +463,8 @@ class ParsedCommand(Command):
     >>> # Initialize a simple command with an option
     >>> cmd = Command("test")
     >>> cmd.option = Option("--option", default="DEFAULT")
-    >>> # Convert Command into a ParsedCommand
-    >>> parsed_cmd = ParsedCommand(cmd)
+    >>> # Convert Command into a ResolvedCommand
+    >>> parsed_cmd = ResolvedCommand(cmd)
     >>> print(parsed_cmd.option)
     DEFAULT
     >>> # Assignment works like with a regular command
@@ -491,7 +481,7 @@ class ParsedCommand(Command):
         ----------
         copy
             Create a deep copy of the command. If False, ``command`` will be
-            modified to be a ``ParsedCommand`` instead of a regular one.
+            modified to be a ``ResolvedCommand`` instead of a regular one.
         """
 
     def __new__(cls, command: Command, deepcopy=True):
@@ -501,17 +491,17 @@ class ParsedCommand(Command):
             cmd = command
         # Matches any of the `Command` subclasses defined in this module
         if command.__module__ == cls.__module__:
-            cmd.__class__ = ParsedCommand
+            cmd.__class__ = ResolvedCommand
         else:
             # All bases that are subclasses of `Command` and were defined in
             # this module (not by the dryparse library user) are replaced by
-            # `ParsedCommand`.
+            # `ResolvedCommand`.
             cmd.__bases__ = type(cmd.__bases__)(
                 (
                     base
                     if not isinstance(base, Command)
                     and base.__module__ == cls.__module__
-                    else ParsedCommand
+                    else ResolvedCommand
                 )
                 for base in cmd.__bases__
             )
@@ -619,12 +609,16 @@ class Meta(DryParseType, metaclass=_NoInit):
     def _copy_to(
         self,
         destination: "Meta",
-        options,
-        subcommands,
-        argument_aliases,
         memo=None,
     ):
         """Perform a deep copy from ``self`` to ``destination``."""
+        cmd = destination.command
+        subcommands = {k: cmd.__getattribute__(k) for k in self.subcommands}
+        argument_aliases = {
+            k: cmd.__getattribute__(k) for k in self.argument_aliases
+        }
+        options = {k: cmd.__getattribute__(k) for k in self.options}
+
         destination.__setattr__(
             "options",
             options,
