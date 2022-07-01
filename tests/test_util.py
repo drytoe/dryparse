@@ -13,11 +13,6 @@ def create_class_with_reassignable_properties():
         def prop2(self) -> int:
             return 2
 
-        def __deepcopy__(self, memo=None):
-            return reassignable_property.deepcopy_func(self.__class__)(
-                self, memo
-            )
-
     return C
 
 

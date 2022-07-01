@@ -36,12 +36,8 @@ class _HelpMetaclass(type):
 
 class DryParseHelpType(DryParseType):  # pylint: disable=too-few-public-methods
     """
-    Common type for most objects in this module, providing a common deepcopy
-    implementation.
+    Common type for most objects in this module.
     """
-
-    def __deepcopy__(self, memo=None):
-        return reassignable_property.deepcopy_func(self.__class__)(self, memo)
 
 
 class Help(DryParseHelpType, metaclass=_HelpMetaclass):
