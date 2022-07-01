@@ -407,10 +407,14 @@ class Command(DryParseType):
         if help or (help is None and hasattr(self, "help") and self.help):
             print(meta.help.text)
         else:
-            verify_function_callable(
-                meta.call, self, *args, help=help, **kwargs
-            )
-            meta.call(self, *args, help=help, **kwargs)
+            kwargs = {
+                **{k: a.values for k, a in meta.argument_aliases.items()},
+                **{k: o.value for k, o in meta.options.items()},
+                "help": help,
+                **kwargs,
+            }
+            verify_function_callable(meta.call, self, **kwargs)
+            meta.call(self, **kwargs)
 
     def __setattr__(self, name, value):
         if isinstance(value, Option):

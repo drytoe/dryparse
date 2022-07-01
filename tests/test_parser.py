@@ -92,10 +92,13 @@ class TestParser:
 
         cmd = create_simple_command()
 
-        def callback(self_: ResolvedCommand, *_, **__):
+        def callback(_, args, opt1=None, opt2=None, help=None):
             nonlocal callback_called
             callback_called = True
-            assert self_.opt1 == "opt1_default"
+            assert args == [True, 10]
+            assert opt1 == "opt1_default"
+            assert opt2 == 2
+            assert help is None
 
         Meta(cmd).set_callback(callback)
         cmd = parse(cmd, ["test", "--opt2", "2", "True", "10"])
