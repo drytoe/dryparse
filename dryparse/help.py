@@ -8,6 +8,19 @@ from typing import List, Optional, Union
 from dryparse.objects import Command, DryParseType, Group, Meta, Option
 from dryparse.util import reassignable_property
 
+__all__ = (
+    "AnyGroup",
+    "DryParseHelpType",
+    "Help",
+    "CommandHelp",
+    "OptionHelp",
+    "GroupHelp",
+    "HelpSection",
+    "HelpSectionList",
+    "HelpEntry",
+    "CommandDescription",
+)
+
 AnyGroup = Union[str, Group]
 _HelpableObject = Union[Command, Option, Group]
 _ConcreteHelp = Union["CommandHelp", "OptionHelp", "GroupHelp"]
@@ -160,6 +173,8 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
         instance of ``override_class`` instead.
     """
 
+    __slots__ = ("option",)
+
     def __init__(self, option: Option):
         self.option = option
 
@@ -257,6 +272,8 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
 
 class GroupHelp(Help, metaclass=_HelpMetaclass):
     """Help for a :class:`~dryparse.objects.Group` object."""
+
+    __slots__ = ("group",)
 
     def __init__(self, group: AnyGroup):
         self.group = group
@@ -490,6 +507,8 @@ class _CommandHelpSectionList(HelpSectionList):
     Contains a command description, usage, subcommands and options section.
     """
 
+    __slots__ = ("desc", "usage", "subcommands", "options")
+
     def __init__(self, command: Command):
         super().__init__()
         self.desc = self.DescSection(command)
@@ -500,7 +519,7 @@ class _CommandHelpSectionList(HelpSectionList):
     class DescSection(HelpSection):
         """Standard description section for a command."""
 
-        __slots__ = ("command",)
+        __slots__ = ("command", "headline")
 
         def __init__(self, command: Command):
             super().__init__("description")

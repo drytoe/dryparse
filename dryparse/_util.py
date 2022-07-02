@@ -6,6 +6,16 @@ from typing import Callable
 from dryparse.errors import SelfNotFirstArgumentError
 
 
+class NoInit(type):
+    """
+    Metaclass that doesn't call __init__ automatically when __new__ is
+    called on a class.
+    """
+
+    def __call__(cls, *args, **kwargs):
+        return cls.__new__(cls, *args, **kwargs)
+
+
 def deepcopy_like_parent(obj: object, memo=None):
     """
     Deep copy ``obj`` using its parent's ``__deepcopy__`` implementation, or

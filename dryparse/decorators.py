@@ -73,7 +73,6 @@ def command(func: Callable[..., Any]):
     """
     doc = parse(func.__doc__)
     cmd = Command(func.__name__, desc=doc.short_description)
-    # TODO positional_args = []
     signature = inspect.signature(func)
 
     for param in signature.parameters.values():

@@ -1,6 +1,8 @@
 """Module containing special option types."""
 from dryparse.objects import DryParseType
 
+__all__ = ("OptionType", "Counter", "Bool")
+
 
 class OptionType(DryParseType):
     """

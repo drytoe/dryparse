@@ -5,6 +5,8 @@ from contextvars import ContextVar
 # vars should be declared globally.
 from typing import List, Optional
 
+__all__ = ("Context", "context")
+
 _args = ContextVar("args", default=None)
 _command_arg_index = ContextVar("command_arg_index", default=0)
 

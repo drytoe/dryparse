@@ -7,14 +7,25 @@ from functools import reduce
 from typing import Any, Callable, List, NoReturn, Sequence, Tuple, Union
 from weakref import WeakKeyDictionary
 
-from ._util import deepcopy_like_parent, ensure_self_arg
+from ._util import NoInit, deepcopy_like_parent, ensure_self_arg
 from .errors import (
     ArgumentConversionError,
     InvalidArgumentPatternError,
     PatternAfterFlexiblePatternError,
     ReadOnlyAttributeError,
 )
-from .util import _NoInit, verify_function_callable
+from .util import verify_function_callable_with_args
+
+__all__ = (
+    "DryParseType",
+    "Group",
+    "Option",
+    "Arguments",
+    "Command",
+    "ResolvedCommand",
+    "RootCommand",
+    "Meta",
+)
 
 _EllipsisType = type(Ellipsis)
 
@@ -51,6 +62,8 @@ class Option(DryParseType):
     help: OptionHelp
         Customizable help object.
     """
+
+    __slots__ = ("short", "long", "argname", "default", "argtype", "desc")
 
     def __init__(
         self,
@@ -183,7 +196,7 @@ class Arguments(DryParseType):
     >>> Arguments(int, (int, range(1, 2)), str)
     """
 
-    __slots__ = ("types", "value", "defaults")
+    __slots__ = ("pattern", "values")
 
     _NumberOfArgs = Union[int, _EllipsisType, range]
     _PatternItem = Union[type, Tuple[type, _NumberOfArgs]]
@@ -423,7 +436,7 @@ class Command(DryParseType):
             elif "help" in kwargs:
                 del kwargs["help"]
             callback = ensure_self_arg(meta.call)
-            verify_function_callable(callback, self, *args, **kwargs)
+            verify_function_callable_with_args(callback, self, *args, **kwargs)
             callback(self, *args, **kwargs)
 
     def __setattr__(self, name, value):
@@ -571,7 +584,7 @@ class RootCommand(Command):
             super().__call__(*args, **kwargs)
 
 
-class Meta(DryParseType, metaclass=_NoInit):
+class Meta(DryParseType, metaclass=NoInit):
     """
     Meta wrapper for :class:`Command` that can be used to access special
     attributes of :class:`Command`.
@@ -582,16 +595,26 @@ class Meta(DryParseType, metaclass=_NoInit):
       ``argument_aliases`` attributes.
     """
 
+    __slots__ = (
+        "command",
+        "options",
+        "subcommands",
+        "argument_aliases",
+        "name",
+        "regex",
+        "help",
+    )
+
     _command_to_meta_map = WeakKeyDictionary()
 
-    options: typing.OrderedDict[str, Option]
     command: Command
+    options: typing.OrderedDict[str, Option]
     subcommands: typing.OrderedDict[str, Command]
     argument_aliases: typing.OrderedDict[str, Arguments]
 
     def __init__(self, command: Command):
-        self.__setattr__("options", OrderedDict(), internal_call=True)
         self.__setattr__("command", command, internal_call=True)
+        self.__setattr__("options", OrderedDict(), internal_call=True)
         self.__setattr__("subcommands", OrderedDict(), internal_call=True)
         self.__setattr__("argument_aliases", OrderedDict(), internal_call=True)
         self.name = ""

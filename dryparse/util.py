@@ -5,15 +5,12 @@ from typing import Any, Callable
 
 from dryparse.errors import CallbackDoesNotSupportAllArgumentsError
 
-
-class _NoInit(type):
-    """
-    Metaclass that doesn't call __init__ automatically when __new__ is
-    called on a class.
-    """
-
-    def __call__(cls, *args, **kwargs):
-        return cls.__new__(cls, *args, **kwargs)
+__all__ = (
+    "parse_str",
+    "first_token_from_regex",
+    "reassignable_property",
+    "verify_function_callable_with_args",
+)
 
 
 def parse_str(text: str, target_type: type):
@@ -92,7 +89,7 @@ class reassignable_property:
         self.name = name
 
 
-def verify_function_callable(func, *args, **kwargs):
+def verify_function_callable_with_args(func, *args, **kwargs):
     """
     Verify if ``func(*args, **kwargs)`` is a valid call without actually
     calling the function. If yes, do nothing, else raise an exception.

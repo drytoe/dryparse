@@ -17,6 +17,8 @@ from .errors import (
 )
 from .objects import Arguments, Command, Meta, Option, ResolvedCommand
 
+__all__ = ("parse", "parse_arg")
+
 
 def parse(command: Command, args: List[str] = None):
     """
