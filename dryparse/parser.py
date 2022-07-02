@@ -45,7 +45,7 @@ def parse(command: Command, args: List[str] = None):
             if isinstance(token, Option):
                 option = token
                 if value is not None and option.type != bool:
-                    option.value = value
+                    option.value = util.parse_str(value, option.type)
                 elif value is not None and option.type == bool:
                     raise OptionDoesNotTakeArgumentsError(arg)
                 elif option.type == bool:

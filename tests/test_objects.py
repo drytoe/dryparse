@@ -42,9 +42,9 @@ class TestArguments:
 
     def test_convert(self):
         args = Arguments(str)
-        assert args.convert(["test"]) == "test"
+        assert args.convert(["test"]) == ["test"]
         args = Arguments((str, 1))
-        assert args.convert(["test"]) == "test"
+        assert args.convert(["test"]) == ["test"]
         args = Arguments(str, int)
         assert args.convert(["test", "1"]) == ["test", 1]
         args = Arguments((int, 2))

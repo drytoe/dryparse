@@ -1,4 +1,9 @@
 """Internal utils."""
+import inspect
+from inspect import Parameter
+from typing import Callable
+
+from dryparse.errors import SelfNotFirstArgumentError
 
 
 def deepcopy_like_parent(obj: object, memo=None):
@@ -53,3 +58,32 @@ def deepcopy_like_parent(obj: object, memo=None):
         cls.__copy__ = cls_copy
 
     return new
+
+
+def ensure_self_arg(func: Callable):
+    """
+    Ensure that ``func``'s first argument is ``self``.
+
+    If it isn't, return a wrapper of ``func`` with ``self`` as the first
+    argument, and the rest of the signature intact. Otherwise, just return
+    ``func``.
+    """
+    if not inspect.isfunction(func):
+        raise NotImplementedError(
+            "Not implemented for the case where `func` is a callable that is "
+            "not a function"
+        )
+    sig = inspect.signature(func)
+    params = sig.parameters
+
+    if "self" in params:
+        if next(iter(params.keys())) != "self":
+            raise SelfNotFirstArgumentError
+        return func
+
+    modified = lambda self, *args, **kwargs: func(*args, **kwargs)
+    params = [Parameter("self", kind=Parameter.POSITIONAL_ONLY)] + list(
+        sig.parameters.values()
+    )
+    modified.__signature__ = sig.replace(parameters=params)
+    return modified

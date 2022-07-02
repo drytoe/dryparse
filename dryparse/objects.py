@@ -3,10 +3,11 @@ import copy
 import inspect
 import typing
 from collections import OrderedDict
+from functools import reduce
 from typing import Any, Callable, List, NoReturn, Sequence, Tuple, Union
 from weakref import WeakKeyDictionary
 
-from ._util import deepcopy_like_parent
+from ._util import deepcopy_like_parent, ensure_self_arg
 from .errors import (
     ArgumentConversionError,
     InvalidArgumentPatternError,
@@ -142,6 +143,9 @@ class Arguments(DryParseType):
         An ``int`` specifies a fixed number of required arguments. Ellipsis is
         a special value meaning *zero or more arguments*. A range specifies a
         range of acceptable argument numbers.
+    values
+        The list of argument values held by this instance. This attribute is
+        assigned when you call :meth:`assign`, and will be ``None`` until then.
 
     Notes
     -----
@@ -155,7 +159,7 @@ class Arguments(DryParseType):
     Examples
     --------
 
-    Here's quite an exhaustive list of example use cases:
+    Here's an exhaustive list of example use cases:
 
     >>> # Single argument of type int
     >>> Arguments(int)
@@ -165,6 +169,8 @@ class Arguments(DryParseType):
     >>> Arguments(int, (bool, 2))
     >>> # Zero or more strings
     >>> Arguments((str, ...))
+    >>> # Same as the above
+    >>> Arguments()
     >>> # One or more strings
     >>> Arguments(str, (str, ...))
     >>> # Between 2 and 4 strings
@@ -203,7 +209,7 @@ class Arguments(DryParseType):
                     flexible_pattern_found = True
                 elif not isinstance(item[0], type) or (
                     not isinstance(item[1], (_EllipsisType, range))
-                    # Hint: a bool is also an int, but we don't allow it
+                    # A bool is a subclass of int, but we don't allow it
                     and not (
                         not isinstance(item[1], bool)
                         and isinstance(item[1], int)
@@ -214,15 +220,16 @@ class Arguments(DryParseType):
             elif not isinstance(item, type):
                 raise InvalidArgumentPatternError
         self.pattern = pattern
-        self.values = []
+        self.values: Union[list, None] = None
 
     def convert(
         self, args: Sequence[str], allow_extra_args=False
     ) -> Union[List[Any], Any]:
+        # pylint: disable=too-many-branches
         """
         Convert (and consequently validate) a list of ``args`` that were
-        possibly specified on the command line to a list of arguments
-        conforming to :attr:`pattern`.
+        specified on the command line to a list of arguments conforming to
+        :attr:`pattern`.
 
         If the conversion of any of the arguments throws an exception, the
         conversion (and validation) will fail. (TODO exception)
@@ -238,57 +245,6 @@ class Arguments(DryParseType):
             Do not raise an exception if there are more ``args`` than can fit
             into ``self.pattern``.
         """
-
-        converted_args = self._convert(args, allow_extra_args=allow_extra_args)
-
-        # If the pattern only has one argument (e.g. `Arguments(int)`), then
-        # return the single parsed argument instead of a list of one element
-        if len(self.pattern) == 1 and (
-            isinstance(self.pattern[0], type)
-            or isinstance(self.pattern[0], tuple)
-            and self.pattern[0][1] == 1
-        ):
-            return converted_args[0]
-        return converted_args
-
-    def assign(self, args: List[str], allow_extra_args=False):
-        """
-        Assign a set of arguments specified on the command line to be held by
-        this instance.
-
-        The arguments are converted and validated using :meth:`convert` in
-        order to conform to :attr:`pattern`.
-
-        Parameters
-        ----------
-        allow_extra_args
-            See :meth:`convert`.
-
-        Returns
-        -------
-        The converted arguments.
-        """
-        # pylint: disable=attribute-defined-outside-init
-        self.values = self._convert(args, allow_extra_args=allow_extra_args)
-        return self.values
-
-    def __iter__(self):
-        return iter(self.values)
-
-    @staticmethod
-    def _pattern_item_to_str(pattern_item: _PatternItem):
-        # pylint: disable=no-else-return
-        if isinstance(pattern_item, type):
-            return pattern_item.__name__
-        elif isinstance(pattern_item, tuple):
-            return f"({', '.join(str(pattern_item))})"
-        else:
-            raise TypeError(pattern_item)
-
-    def _convert(
-        self, args: Sequence[str], allow_extra_args=False
-    ) -> Union[List[Any], Any]:
-        # pylint: disable=too-many-branches
 
         converted_args = []
         flexible_pattern: Union[Tuple[_EllipsisType, range], None] = None
@@ -372,6 +328,48 @@ class Arguments(DryParseType):
 
         return converted_args
 
+    def assign(self, args: List[str], allow_extra_args=False):
+        """
+        Assign a set of arguments specified on the command line to be held by
+        this instance.
+
+        The arguments are converted and validated using :meth:`convert` in
+        order to conform to :attr:`pattern`.
+
+        Parameters
+        ----------
+        allow_extra_args
+            See :meth:`convert`.
+
+        Returns
+        -------
+        List of the converted arguments.
+        """
+        # pylint: disable=attribute-defined-outside-init
+        self.values = self.convert(args, allow_extra_args=allow_extra_args)
+
+        return self.values
+
+    def __iter__(self):
+        return iter(self.values) if self.values else iter(())
+
+    def __repr__(self):
+        cls = self.__class__
+        return (
+            f"<{cls.__module__}.{cls.__qualname__}({self.pattern}) object "
+            f"at {hex(id(self))}>"
+        )
+
+    @staticmethod
+    def _pattern_item_to_str(pattern_item: _PatternItem):
+        # pylint: disable=no-else-return
+        if isinstance(pattern_item, type):
+            return pattern_item.__name__
+        elif isinstance(pattern_item, tuple):
+            return f"({', '.join(str(pattern_item))})"
+        else:
+            raise TypeError(pattern_item)
+
 
 class Command(DryParseType):
     """
@@ -400,21 +398,33 @@ class Command(DryParseType):
     def __call__(self, *args, help=None, **kwargs):
         """
         Execute the command. Unless overridden, this will process special
-        options like help and version, and handle subcommands.
+        options like ``help``, and handle subcommands.
         """
         # pylint: disable=redefined-builtin
         meta = Meta(self)
         if help or (help is None and hasattr(self, "help") and self.help):
             print(meta.help.text)
         else:
+            args = args or reduce(
+                lambda a, b: [*a, *b],
+                (a.values or [] for a in meta.argument_aliases.values()),
+            )
             kwargs = {
-                **{k: a.values for k, a in meta.argument_aliases.items()},
                 **{k: o.value for k, o in meta.options.items()},
-                "help": help,
                 **kwargs,
             }
-            verify_function_callable(meta.call, self, **kwargs)
-            meta.call(self, **kwargs)
+            callback_params = inspect.signature(meta.call).parameters
+            if "help" in callback_params or any(
+                p
+                for p in callback_params.values()
+                if p.kind == inspect.Parameter.VAR_KEYWORD
+            ):
+                kwargs["help"] = help
+            elif "help" in kwargs:
+                del kwargs["help"]
+            callback = ensure_self_arg(meta.call)
+            verify_function_callable(callback, self, *args, **kwargs)
+            callback(self, *args, **kwargs)
 
     def __setattr__(self, name, value):
         if isinstance(value, Option):
@@ -459,8 +469,8 @@ class Command(DryParseType):
 
 class ResolvedCommand(Command):
     """
-    Wrapper around :class:`Command` that provides access to option values as if
-    they were regular attributes.
+    Wrapper around :class:`Command` that provides access to option values and
+    argument values as if they were regular attributes.
 
     Examples
     --------
@@ -520,6 +530,19 @@ class ResolvedCommand(Command):
         attr = super().__getattribute__(name)
         if isinstance(attr, Option):
             return attr.value
+        if isinstance(attr, Arguments):
+            if attr.values is None:
+                return None
+            # If the pattern only has one argument (e.g. `Arguments(int)`),
+            # then return the single parsed argument instead of a list with one
+            # element
+            if len(self.pattern) == 1 and (
+                isinstance(self.pattern[0], type)
+                or isinstance(self.pattern[0], tuple)
+                and self.pattern[0][1] == 1
+            ):
+                return attr.values[0]
+            return attr.values
         return attr
 
 
@@ -545,7 +568,7 @@ class RootCommand(Command):
         if hasattr(self, "version") and version and "help" not in kwargs:
             print(f"{Meta(self).regex} version {Meta(self).version}")
         else:
-            super().__call__(*args, version=version, **kwargs)
+            super().__call__(*args, **kwargs)
 
 
 class Meta(DryParseType, metaclass=_NoInit):
@@ -556,7 +579,7 @@ class Meta(DryParseType, metaclass=_NoInit):
     Notes
     -----
     - Do not modify the ``options``, ``command``, ``subcommands`` and
-    ``argument_aliases`` attributes.
+      ``argument_aliases`` attributes.
     """
 
     _command_to_meta_map = WeakKeyDictionary()
@@ -598,7 +621,16 @@ class Meta(DryParseType, metaclass=_NoInit):
         super().__setattr__(key, value)
 
     def call(self, *args, **kwargs):  # pylint: disable=method-hidden
-        """Callback function for when this command is invoked."""
+        """
+        Callback function for when this command is invoked.
+
+        You can freely assign this method on an instance of :class:`Meta`. Just
+        keep in mind that the signature must support all arguments and options
+        that can be passed to it after the command is parsed. The function can
+        but need not have a ``self`` argument; but if it does, it must be the
+        first. This argument can be used to access the associated
+        :class:`ResolvedCommand` object.
+        """
 
     def set_callback(self, func: Callable[[Command], Any]):
         """

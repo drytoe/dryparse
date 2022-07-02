@@ -1,13 +1,14 @@
 """All errors that can be raised directly by dryparse."""
 
 # TODO write error messages for each exception
+from inspect import Parameter
 from typing import Sequence
 
 # pylint: disable=missing-class-docstring
 
 
 class DryParseError(Exception):
-    pass
+    """Base class for all dryparse exceptions."""
 
 
 class OptionRequiresArgumentError(DryParseError):
@@ -82,7 +83,7 @@ class ValueConversionError(DryParseError):
 class CallbackDoesNotSupportAllArgumentsError(DryParseError):
     def __init__(self):
         super().__init__(
-            "Callback function does not support arguments passed to it: "
+            "Callback function does not support arguments passed to it"
         )
 
 
@@ -99,3 +100,20 @@ class TooManyPositionalArgumentsError(DryParseError):
 class ReadOnlyAttributeError(DryParseError):
     def __init__(self, name: str):
         super().__init__(f"Attribute is read-only: {name}")
+
+
+class AnnotationMustBeTypeOrSpecialError(DryParseError):
+    def __init__(self, param: Parameter):
+        msg = "Annotation must be a type or a special value if applicable"
+        if param.name:
+            msg += f"  Parameter name: {param.name}"
+        if param.annotation:
+            msg += f"  Annotation: {param.annotation}"
+        super().__init__(msg)
+
+
+class SelfNotFirstArgumentError(DryParseError):
+    def __init__(self):
+        super().__init__(
+            "If callback has a self argument, it must be the first"
+        )

@@ -48,6 +48,12 @@ class TestParser:
         opt, value = parse_arg(cmd, "--output=file2")
         assert isinstance(opt, Option) and value == "file2"
 
+    def test_parse_option_with_equals_value(self):
+        cmd = Command("test")
+        cmd.opt = Option(
+            "--opt",
+        )
+
     def test_parse_command_with_options(self):
         cmd = Command("test")
         cmd.random = Option("-r", "--random")
@@ -63,6 +69,11 @@ class TestParser:
         assert type(cmd.random) == bool and cmd.random and cmd.output == "file"
 
     def test_parse_command_help(self, capfd):
+        """
+        - Construct a command and call it with the ``-h`` option and some
+          additional arguments.
+        - Verify the contents of the help message
+        """
         cmd = Command("test")
         random = Option("-r", "--random")
         cmd.random = random
@@ -92,10 +103,10 @@ class TestParser:
 
         cmd = create_simple_command()
 
-        def callback(_, args, opt1=None, opt2=None, help=None):
+        def callback(*args, opt1=None, opt2=None, help=None):
             nonlocal callback_called
             callback_called = True
-            assert args == [True, 10]
+            assert args == (True, 10)
             assert opt1 == "opt1_default"
             assert opt2 == 2
             assert help is None
