@@ -90,11 +90,6 @@ if os.environ.get("READTHEDOCS", False):
 
     # Add a tag so we can customize some rst files for ReadTheDocs
     tags.add("ReadTheDocs")
-    # Confer [*]
-    exclude_patterns.remove("man")
-
-    # Move them to man/ so the resulting URL looks nicer [*]
-    call("mv _intermediate/man/* man/", shell=True)
 
     # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓
     # ┃ Debugging on ReadTheDocs ┃
