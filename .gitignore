@@ -7,8 +7,11 @@ _build
 /build/
 /dist/
 __pycache__
-tem.egg-info
+dryparse.egg-info
 .mypy_cache/
 
 # Misc
 /.idea
+
+# This file can be useful for local testing
+dryparse/__main__.py
