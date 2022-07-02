@@ -29,6 +29,7 @@ extensions = [
     "sphinx_rtd_dark_mode",
     "sphinx_copybutton",
     "sphinx-prompt",
+    "sphinx_tabs.tabs",
     "sphinx_toolbox.source",
 ]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
@@ -54,7 +55,13 @@ autodoc_member_order = "bysource"
 autodoc_typehints_format = "short"
 add_module_names = False
 autosummary_generate = True
-napoleon_custom_sections = ["Constants", "Attributes", "Returns", "Methods"]
+napoleon_custom_sections = [
+    "Constants",
+    "Attributes",
+    "Returns",
+    "Methods",
+    "Caveats",
+]
 
 # ┏━━━━━━━━━━━━━━━━┓
 # ┃ Sphinx toolbox ┃

@@ -1,17 +1,16 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
-import tem
+import dryparse
 
 setup(
     name="dryparse",
     version=dryparse.__version__,
-    description="DRY parser",
+    description="DRY command line parser",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
-    url="{<>}",
-    author="{<>}",
-    author_email="{<>}",
-    classifiers=["Programming Language :: Python :: {<>}"],
-    packages=[],
-    entry_points={"console_scripts": ["{<name>}={<name>}.__main__:main"]},
+    url="https://github.com/drytoe/dryparse",
+    author="Haris Gušić",
+    author_email="harisgusic.dev@gmail.com",
+    classifiers=["Programming Language :: Python :: 3.7"],
+    packages=find_packages(),
 )

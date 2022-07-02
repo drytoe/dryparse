@@ -1,3 +1,4 @@
+====================================
 Welcome to dryparse's documentation!
 ====================================
 
@@ -7,7 +8,9 @@ Welcome to dryparse's documentation!
 
    getting_started.rst
    objects.rst
+   customizing_help.rst
    api/index.rst
+   contributing.rst
 
 In a nutshell, dryparse is a CLI parser that makes it easy to turn regular
 functions and objects into command line commands and options. It works out of
@@ -19,7 +22,7 @@ As an appetizer, let's try to recreate the ubiquitous `cp` command:
 
 .. autolink-preface:: import dryparse
 
-.. code-block:: python
+.. code:: python
 
    @dryparse.command
    def cp(
@@ -32,32 +35,32 @@ As an appetizer, let's try to recreate the ubiquitous `cp` command:
 
 Do this in your program's entrypoint:
 
-.. code-block:: python
+.. code:: python
 
    dryparse.parse(cp, sys.argv)
 
 When someone runs this in the shell:
 
-.. code-block:: shell
+.. code:: shell
 
    cp --link -r --target-directory "/tmp/" source/ b.txt
 
 this will run in the python world:
 
-.. code-block:: python
+.. code:: python
 
    cp("source/", "b.txt", link=True, recursive=True, target_directory="/tmp/")
 
 This works out of the box too (help is automatically generated from the function
 docstring):
 
-.. code-block:: shell
+.. prompt:: bash
 
    cp --help
 
 A more holistic example:
 
-.. code-block:: shell
+.. prompt:: bash
 
    docker run -ite ENVVAR1=1 --env ENVVAR2=2 \
       --volume=/:/mnt:ro -v /home:/h         \
@@ -79,7 +82,7 @@ A more holistic example:
               volume=[("/", "/mnt", "ro"), ("/home", "/h")])
 
 Problems
---------
+========
 
 - When a command contains a subcommand and option with the same name
 

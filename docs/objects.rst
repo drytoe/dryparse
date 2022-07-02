@@ -1,8 +1,9 @@
-..
+.. comment::
    NOTE: The examples used here are essentially a decomposition of docs/examples/git.py,
    which contains the full example and is runnable and testable. Keep this
    example up to date with that file.
 
+============
 Object model
 ============
 
@@ -18,12 +19,14 @@ instance of :class:`~dryparse.objects.Command`, each option by an
 :class:`~dryparse.objects.Option`, etc.
 
 The fundamentals
-----------------
+================
 
 The simplest way to create a command is:
 
-.. autolink-preface:: from dryparse.objects import *
-.. autolink-preface:: from dryparse.help import *
+.. autolink-preface::
+
+   from dryparse.objects import *
+   from dryparse.help import *
 
 .. code:: python
 
@@ -67,7 +70,7 @@ attribute that is just like any other attribute. You can delete it if you don't 
    del git.help
 
 Adding a subcommand
--------------------
+===================
 
 Adding a subcommand is just as easy as adding an option:
 
@@ -77,7 +80,7 @@ Adding a subcommand is just as easy as adding an option:
    git.checkout = Command("checkout", desc="Switch branches or restore working tree files")
 
 Defining positional arguments
------------------------------
+=============================
 
 .. code:: python
 
@@ -87,7 +90,7 @@ These use cases are simple, but :class:`~dryparse.objects.Arguments` has so much
 more to offer. Take a look at its API documentation.
 
 Root command
-------------
+============
 
 CLI programs usually include a `--version` option in their root command. While
 you can add this option yourself, we provide :class:`~dryparse.objects.RootCommand` as a convenience:
@@ -95,34 +98,3 @@ you can add this option yourself, we provide :class:`~dryparse.objects.RootComma
 .. code:: python
 
    git = RootCommand("git", version="0.1.0", desc="A version control software")
-
-Customizing help output
------------------------
-
-Dryparse generates standard help out of the box, but it provides a hierarchical
-representation of a help message via :class:`~dryparse.help.Help`. You can
-obtain a help object for any of: :class:`~dryparse.objects.Command`,
-:class:`~dryparse.objects.Option`, :class:`~dryparse.objects.Group`.
-
-.. todo:: Group help is not implemented yet.
-
-.. code:: python
-
-   git_help = Help(git)
-
-For example, the default help message for the `git` subcommand we've been
-building so far would be:
-
-.. code::
-
- A version control software
-
- Usage: git [-h] []
-
-You can easily convert this to a help message string using:
-
-.. code:: python
-
-   str(git_help)
-   # or
-   git_help.text
