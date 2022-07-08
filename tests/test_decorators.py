@@ -5,7 +5,7 @@ from dryparse.objects import Option, Arguments, Meta
 def create_cp_command():
     @dryparse.command
     def cp(source: str, dest: str, *, recursive=False):
-        pass
+        _ = source, dest, recursive
 
     return cp
 
@@ -17,18 +17,50 @@ class TestCommandDecorator:
     def setup_class(cls):
         cls.manually_created_option = Option("-O", "--Opt4")
 
+    def test_command_creation_empty(self):
+        """Command with no arguments or options (except default `help`)."""
+
+        @dryparse.command
+        def cmd1():
+            pass
+
+        @dryparse.command
+        def cmd2(self):
+            _ = self
+
+        assert list(cmd1.__dict__.keys()) == ["help"]
+        assert list(cmd2.__dict__.keys()) == ["help"]
+
+    def test_command_creation_simple(self):
+        @dryparse.command
+        def cmd(arg1: str, arg2: int, o: int = None, p: str = "a"):
+            _ = arg1, arg2, o, p
+
+        assert isinstance(cmd.arg1, Arguments) and cmd.arg1.pattern == (str,)
+        assert isinstance(cmd.arg2, Arguments) and cmd.arg2.pattern == (int,)
+        assert (
+            isinstance(cmd.o, Option)
+            and cmd.o.type == int
+            and cmd.o.long == "--o"
+        )
+        assert (
+            isinstance(cmd.p, Option)
+            and cmd.p.type == str
+            and cmd.p.long == "--p"
+        )
+
     def test_command_creation(self):
         manually_created_option = self.manually_created_option
 
         def func(
             pos1: int,  # Arguments(int)
             *pos_any: str,  # Arguments((str, ...))
-            opt1: bool,  # Option("-o", "--opt1", argtype=bool)
-            opt2: float = 3,  # Option("--opt1", argtype=float, default=3)
+            opt1: bool,  # Option("-o", "--opt", argtype=bool)
+            opt2: float = 3,  # Option("--opt", argtype=float, default=3)
             opt_3,  # Option("--opt-3", argtype=str)
             opt4: manually_created_option
         ):
-            pass
+            _ = pos1, pos_any, opt1, opt2, opt_3, opt4
 
         cmd = dryparse.command(func)
 
@@ -57,44 +89,17 @@ class TestCommandDecorator:
         )
         assert cmd.opt4 is manually_created_option
 
-    def test_parsing(self):
-        manually_created_option = self.manually_created_option
-        callback_called = False
-
-        @dryparse.command
-        def cmd(
-            pos1: int,  # Arguments(int)
-            *pos_any: str,  # Arguments((str, ...))
-            opt1: bool,  # Option("-o", "--opt1", argtype=bool)
-            opt2: float = 3,  # Option("--opt1", argtype=float, default=3)
-            opt_3,  # Option("--opt-3", argtype=str)
-            opt4: manually_created_option
-        ):
-            nonlocal callback_called
-            callback_called = True
-            assert pos1 == 1
-            assert list(pos_any) == ["a", "b"]
-            assert opt1 is True
-            assert opt2 == 4
-            assert opt_3 == "opt3_value"
-            assert opt4 is True
-
-        cmd = dryparse.parse(
-            cmd,
-            [
-                "cmd",
-                "1",
-                "a",
-                "b",
-                "--opt1",
-                "--opt2=4",
-                "--opt-3",
-                "opt3_value",
-                "--Opt4",
-            ],
-        )
-        cmd()
-        assert callback_called
-
     def test_help(self):
-        pass
+        @dryparse.command
+        def cmd(arg1, *args, opt1=None, opt2=None):
+            """A test command.
+
+            :param arg1: Argument no. 1.
+            :param args: Remaining arguments.
+            :param opt1: Option no. 1.
+            :param opt2: Option no. 2.
+            """
+            pass
+
+        assert str(Meta(cmd).help.desc) == "A test command."
+        # TODO params

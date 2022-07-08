@@ -16,7 +16,7 @@ from dryparse.parser import parse_arg
 
 def create_simple_command():
     cmd = Command("test")
-    cmd.opt1 = Option("-1", "--opt1", default="opt1_default")
+    cmd.opt1 = Option("-1", "--opt", default="opt1_default")
     cmd.opt2 = Option("-2", "--opt2", default="opt2_default", argtype=int)
     cmd.args = Arguments(bool, int)
     return cmd
@@ -24,7 +24,7 @@ def create_simple_command():
 
 def create_command_class():
     class MyCommand(Command):
-        opt1 = Option("-1", "--opt1", default="opt1_default")
+        opt1 = Option("-1", "--opt", default="opt1_default")
         opt2 = Option("-2", "--opt2", default="opt2_default", argtype=int)
         args = Arguments(bool, int)
 

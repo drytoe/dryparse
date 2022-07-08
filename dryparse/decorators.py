@@ -72,10 +72,20 @@ def command(func: Callable[..., Any]):
     dryparse.objects.Meta.call
     """
     doc = parse(func.__doc__)
+
     cmd = Command(func.__name__, desc=doc.short_description)
     signature = inspect.signature(func)
 
-    for param in signature.parameters.values():
+    params = signature.parameters.values()
+    iter_params = iter(params)
+
+    # A first parameter named 'self' is special - do not generate an
+    # Argument/Option from it
+    first_param = next(iter(params), None)
+    if first_param and first_param.name == "self":
+        next(iter_params)
+
+    for param in iter_params:
         if param.kind == Parameter.POSITIONAL_ONLY or (
             param.kind == Parameter.POSITIONAL_OR_KEYWORD
             and param.default == Parameter.empty
@@ -89,7 +99,7 @@ def command(func: Callable[..., Any]):
             setattr(cmd, param.name, Arguments((param.annotation, ...)))
         elif param.kind == Parameter.KEYWORD_ONLY or (
             param.kind == Parameter.POSITIONAL_OR_KEYWORD
-            and param.default == Parameter.empty
+            and param.default != Parameter.empty
         ):
             if not isinstance(param.annotation, (type, Option)):
                 raise AnnotationMustBeTypeOrSpecialError(param)

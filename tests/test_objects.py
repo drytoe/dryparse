@@ -1,6 +1,8 @@
+import copy
+
 import pytest
 
-from dryparse.objects import Arguments
+from dryparse.objects import Arguments, Command, Meta, Option
 from dryparse.errors import (
     InvalidArgumentPatternError,
     ArgumentConversionError,
@@ -102,3 +104,59 @@ class TestArguments:
             args.convert(["a"])
         with pytest.raises(ArgumentConversionError):
             args.convert(["a", "b", "c", "d"])
+
+
+class TestCommand:
+    cmd: Command
+    meta: Meta
+
+    @classmethod
+    def setup_class(cls):
+        cls.cmd = Command("test", regex="^test$", desc="Test command")
+        cls.meta = Meta(cls.cmd)
+
+    def test_basic(self):
+        assert isinstance(self.cmd.help, Option) and self.cmd.help.type == bool
+
+    def test_meta_instantiation(self):
+        assert Meta(self.cmd) == Meta(self.cmd)
+
+    def test_meta_updating(self):
+        """Test if Meta(cmd) is properly updated as cmd gets new attributes."""
+        assert list(self.meta.options.keys()) == ["help"]
+        self.cmd.opt = opt = Option("-o")
+        self.cmd.arg = arg = Arguments()
+        self.cmd.sub = sub = Command("sub")
+        assert (
+            self.meta.options.get("opt", None) is opt
+            and self.meta.argument_aliases.get("arg", None) is arg
+            and self.meta.subcommands.get("sub", None) is sub
+        )
+
+        self.cmd.opt2 = Option("-o2")
+        self.cmd.arg2 = Arguments()
+        self.cmd.sub2 = Command("sub2")
+        del self.cmd.opt
+        del self.cmd.arg
+        del self.cmd.sub
+        assert (
+            set(self.meta.options.keys()) == {"help", "opt2"}
+            and set(self.meta.argument_aliases.keys()) == {"arg2"}
+            and set(self.meta.subcommands.keys()) == {"sub2"}
+        )
+
+    def test_deepcopy(self):
+        cmd = copy.deepcopy(self.cmd)
+        cmd.sub = Command("sub")
+        meta = Meta(cmd)
+        assert self.meta.help is not meta.help
+        self.cmd.help.value = True
+        assert cmd.help.value != self.cmd.help.value
+        self.cmd.help.value = False
+        cmd.help.value = True
+        assert cmd.help.value != self.cmd.help.value
+        assert (
+            meta.options is not self.meta.options
+            and meta.subcommands is not self.meta.subcommands
+            and meta.argument_aliases is not self.meta.argument_aliases
+        )
