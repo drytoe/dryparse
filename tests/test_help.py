@@ -4,7 +4,7 @@ import pytest
 
 import lib
 from dryparse.help import HelpSectionList, HelpSection, Description
-from dryparse.objects import Meta
+from dryparse.objects import Meta, Arguments, Command
 
 
 class TestHelp:
@@ -22,8 +22,43 @@ class TestHelp:
 
 
 class TestArgumentsHelp:
-    def test(self):
-        pass
+    def test_single(self):
+        a = Arguments(str, desc="a single arg")
+        cmd = Command("cmd")
+        cmd.arg = a
+        h = a.help
+        # Name auto assignment
+        assert h.name == "arg"
+        assert h.desc == "a single arg"
+        assert h.signature == "arg"
+        assert h.hint == h.signature
+
+    def test_signature_2(self):
+        assert (
+            Arguments((str, 1), (int, 2), bool, name="arg").help.signature
+            == "arg{4}"
+        )
+
+    def test_signature_0_or_more(self):
+        assert Arguments((str, ...), name="arg").help.signature == "[arg...]"
+
+    def test_signature_1_or_more(self):
+        assert (
+            Arguments(int, (str, ...), name="arg").help.signature
+            == "arg{1...}"
+        )
+
+    def test_signature_0_to_2(self):
+        assert (
+            Arguments((int, range(0, 2)), name="arg").help.signature
+            == "[arg{0..2}]"
+        )
+
+    def test_signature_1_to_3(self):
+        assert (
+            Arguments((int, range(1, 3)), name="arg").help.signature
+            == "arg{1..3}"
+        )
 
 
 class TestHelperObjects:

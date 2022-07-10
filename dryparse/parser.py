@@ -69,7 +69,7 @@ def parse(command: Command, args: List[str] = None):
             positional_args, Meta(cmd).argument_aliases.values()
         )
 
-        # Put all positional argument into cmd's arguments of type `Arguments`
+        # Put all positional arguments into cmd's arguments of type `Arguments`
         if parsed_arg_count > len(positional_args):
             raise NotEnoughPositionalArgumentsError
         if parsed_arg_count < len(positional_args):

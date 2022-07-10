@@ -3,6 +3,7 @@
 import copy
 import textwrap
 from io import StringIO
+from itertools import chain
 from typing import List, Optional, Union, overload
 
 from dryparse.objects import (
@@ -104,11 +105,7 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
         # it should be converted to a Description
         if key == "desc":
             attr = super().__getattribute__("desc")
-            return (
-                attr
-                if isinstance(attr, Description)
-                else Description(attr)
-            )
+            return attr if isinstance(attr, Description) else Description(attr)
         return super().__getattribute__(key)
 
     @reassignable_property
@@ -293,6 +290,14 @@ class ArgumentsHelp(Help, metaclass=_HelpMetaclass):
         self.arguments = arguments
 
     @reassignable_property
+    def name(self):
+        """The (collective) name of this/these argument(s)."""
+        # pylint: disable-next=protected-access
+        return self.arguments._name or ""
+
+    name: str
+
+    @reassignable_property
     def desc(self):  # pylint: disable=no-self-use
         """Arguments description."""
         return ""
@@ -335,12 +340,15 @@ class ArgumentsHelp(Help, metaclass=_HelpMetaclass):
                     upper_bound += num.stop
 
         if (lower_bound, upper_bound) == (1, 1):
-            return self.hint
+            return self.name
+        if lower_bound == upper_bound:
+            return f"{self.name}{{{lower_bound}}}"
         if lower_bound == 0 and upper_bound is Inf:
-            return self.hint + "..."
+            return f"[{self.name}...]"
         if lower_bound != 0 and upper_bound is Inf:
-            return f"{self.hint}{{{lower_bound}...}}"
-        return f"{self.hint}{{{lower_bound}..{upper_bound}}}"
+            return f"{self.name}{{{lower_bound}...}}"
+        res = f"{self.name}{{{lower_bound}..{upper_bound}}}"
+        return res if lower_bound != 0 else f"[{res}]"
 
     signature: str
 
@@ -351,8 +359,8 @@ class ArgumentsHelp(Help, metaclass=_HelpMetaclass):
 
         Default value: Same as ``self.signature``.
         """
-        # pylint: disable=no-self-use,unnecessary-ellipsis
-        raise NotImplementedError
+        # pylint: disable=no-self-use,no-member
+        return self.signature
 
     hint: str
 
@@ -646,6 +654,7 @@ class _CommandHelpSectionList(HelpSectionList):
         super().__init__()
         self.desc = self.DescSection(command)
         self.usage = self.UsageSection(command)
+        self.arguments = self.ArgumentsSection(command)
         self.subcommands = self.CommandsSection(command)
         self.options = self.OptionsSection(command)
 
@@ -686,7 +695,15 @@ class _CommandHelpSectionList(HelpSectionList):
             out = StringIO()
             print(
                 f"Usage: {meta.name}",
-                " ".join(opt.help.hint for opt in meta.options.values()),
+                " ".join(
+                    chain(
+                        (opt.help.hint for opt in meta.options.values()),
+                        (
+                            arg.help.hint
+                            for arg in meta.argument_aliases.values()
+                        ),
+                    )
+                ),
                 file=out,
                 end="",
             )
@@ -697,6 +714,27 @@ class _CommandHelpSectionList(HelpSectionList):
 
         def __repr__(self):
             return object.__repr__(self)
+
+    class ArgumentsSection(HelpSection):
+        """Standard section containing positional arguments for a command."""
+
+        __slots__ = ("command",)
+
+        def __init__(self, command: Command):
+            super().__init__("Arguments")
+            self.command = command
+
+        @reassignable_property
+        def content(self):
+            meta = Meta(self.command)
+            return "\n".join(
+                tuple(a.help.text for a in meta.argument_aliases.values())
+            )
+
+        @reassignable_property
+        def active(self):
+            meta = Meta(self.command)
+            return bool(meta.argument_aliases)
 
     class CommandsSection(HelpSection):
         """Standard section containing subcommands for a command."""

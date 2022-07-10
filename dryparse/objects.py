@@ -159,8 +159,8 @@ class Arguments(DryParseType):
     values
         The list of argument values held by this instance. This attribute is
         assigned when you call :meth:`assign`, and will be ``None`` until then.
-    help
-
+    help: ~dryparse.help.Help
+        The help message object for this object.
 
     Notes
     -----
@@ -198,7 +198,7 @@ class Arguments(DryParseType):
     >>> Arguments(int, (int, range(1, 2)), str)
     """
 
-    __slots__ = ("pattern", "values", "help")
+    __slots__ = ("pattern", "values", "help", "_name")
 
     _NumberOfArgs = Union[int, _EllipsisType, range]
     _PatternItem = Union[type, Tuple[type, _NumberOfArgs]]
@@ -243,6 +243,11 @@ class Arguments(DryParseType):
         from .help import ArgumentsHelp
 
         self.help = ArgumentsHelp(self)
+        #: Used to signal to `Command` that this object has not had a name
+        #: assigned, and that it should automatically to <name> in a
+        # construct like:
+        #:   command.<name> = Arguments()
+        self._name = name
         if name is not None:
             self.help.name = name
         if desc is not None:
@@ -469,6 +474,9 @@ class Command(DryParseType):
             super().__setattr__(name, value)
             Meta(self).subcommands[name] = value
         elif isinstance(value, Arguments):
+            if value._name is None:
+                value._name = name
+                value.help.name = name
             super().__setattr__(name, value)
             Meta(self).argument_aliases[name] = value
         else:
