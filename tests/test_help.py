@@ -3,7 +3,7 @@ import copy
 import pytest
 
 import lib
-from dryparse.help import HelpSectionList, HelpSection, CommandDescription
+from dryparse.help import HelpSectionList, HelpSection, Description
 from dryparse.objects import Meta
 
 
@@ -27,19 +27,19 @@ class TestArgumentsHelp:
 
 
 class TestHelperObjects:
-    def test_command_description(self):
-        desc = CommandDescription("long")
+    def test_description(self):
+        desc = Description("long")
         assert desc.long == "long"
         assert desc.brief == "long"
 
-        desc = CommandDescription("long", "brief")
+        desc = Description("long", "brief")
         assert desc.long == "long"
         assert desc.brief == "brief"
 
-        _desc = CommandDescription("long", "brief")
-        desc = CommandDescription(_desc)
+        _desc = Description("long", "brief")
+        desc = Description(_desc)
         assert desc.long == "long"
         assert desc.brief == "brief"
 
         with pytest.raises(ValueError):
-            _desc = CommandDescription(_desc, brief="asdfasdf")
+            _desc = Description(_desc, brief="asdfasdf")

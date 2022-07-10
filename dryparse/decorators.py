@@ -11,7 +11,7 @@ from dryparse.errors import (
     AnnotationMustBeTypeOrSpecialError,
     VariadicKwargsNotAllowedError,
 )
-from dryparse.help import CommandDescription
+from dryparse.help import Description
 from dryparse.objects import Arguments, Command, Meta, Option
 
 __all__ = ("command", "subcommand")
@@ -76,7 +76,7 @@ def command(func: Callable[..., Any]):
 
     cmd = Command(
         func.__name__,
-        desc=CommandDescription(
+        desc=Description(
             (
                 doc.short_description
                 + ("\n\n" if doc.long_description else "")

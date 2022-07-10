@@ -207,7 +207,7 @@ class Arguments(DryParseType):
         self,
         *pattern: _PatternItem,
         name: str = None,
-        desc: Union[str, "CommandDescription"] = None,
+        desc: Union[str, "Description"] = None,
     ):
         if not pattern:
             self.pattern = [(str, ...)]
@@ -398,7 +398,7 @@ class Arguments(DryParseType):
 
 
 if typing.TYPE_CHECKING:
-    from dryparse.help import CommandDescription
+    from dryparse.help import Description
 
 
 class Command(DryParseType):
@@ -420,7 +420,7 @@ class Command(DryParseType):
         self,
         name: str,
         regex: str = None,
-        desc: Union[str, "CommandDescription"] = None,
+        desc: Union[str, "Description"] = None,
     ):
         meta = Meta(self)
         meta.name = name

@@ -26,7 +26,7 @@ __all__ = (
     "HelpSection",
     "HelpSectionList",
     "HelpEntry",
-    "CommandDescription",
+    "Description",
 )
 
 AnyGroup = Union[str, Group]
@@ -101,13 +101,13 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
 
     def __getattribute__(self, key):
         # The desc attribute is special. No matter how the user overrides it,
-        # it should be converted to a CommandDescription
+        # it should be converted to a Description
         if key == "desc":
             attr = super().__getattribute__("desc")
             return (
                 attr
-                if isinstance(attr, CommandDescription)
-                else CommandDescription(attr)
+                if isinstance(attr, Description)
+                else Description(attr)
             )
         return super().__getattribute__(key)
 
@@ -124,17 +124,17 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
     signature: str
 
     @reassignable_property
-    def desc(self) -> "CommandDescription":  # pylint: disable=no-self-use
+    def desc(self) -> "Description":  # pylint: disable=no-self-use
         """
         Command description.
 
-        You can assign this to be a ``str`` or :class:`CommandDescription`, but
-        you will always get a :class:`CommandDescription` when you try to
+        You can assign this to be a ``str`` or :class:`Description`, but
+        you will always get a :class:`Description` when you try to
         access this as an attribute.
         """
-        return CommandDescription("")
+        return Description("")
 
-    desc: "CommandDescription"
+    desc: "Description"
 
     @reassignable_property
     def sections(self) -> "HelpSectionList":
@@ -532,7 +532,7 @@ class HelpEntry(DryParseHelpType):
 
     __slots__ = ("signature", "desc")
 
-    def __init__(self, signature: str, desc: Union[str, "CommandDescription"]):
+    def __init__(self, signature: str, desc: Union[str, "Description"]):
         self.signature = signature
         self.desc = desc
 
@@ -564,7 +564,7 @@ class HelpEntry(DryParseHelpType):
         if self.desc:
             return self.padded_signature + (
                 self.desc.long
-                if isinstance(self.desc, CommandDescription)
+                if isinstance(self.desc, Description)
                 else self.desc
             )
         return self.signature
@@ -572,8 +572,7 @@ class HelpEntry(DryParseHelpType):
     text: str
 
 
-# TODO rename to Description
-class CommandDescription:
+class Description:
     """
     Command description that can hold both a long and a brief version.
 
@@ -591,8 +590,8 @@ class CommandDescription:
         Same as attribute.
     brief: str
         Same as attribute.
-    other: CommandDescription
-        Initializes this object from an existing :class:`CommandDescription`
+    other: Description
+        Initializes this object from an existing :class:`Description`
         object, copying its ``long`` and ``brief`` attributes.
 
     Raises
@@ -608,15 +607,15 @@ class CommandDescription:
         ...
 
     @overload
-    def __init__(self, other: "CommandDescription"):
+    def __init__(self, other: "Description"):
         ...
 
     def __init__(
         self,
-        long_or_description: Union[str, "CommandDescription"],
+        long_or_description: Union[str, "Description"],
         brief: str = None,
     ):
-        if isinstance(long_or_description, CommandDescription):
+        if isinstance(long_or_description, Description):
             description = long_or_description
             if brief is not None:
                 raise ValueError("brief")
