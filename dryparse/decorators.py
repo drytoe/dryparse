@@ -11,6 +11,7 @@ from dryparse.errors import (
     AnnotationMustBeTypeOrSpecialError,
     VariadicKwargsNotAllowedError,
 )
+from dryparse.help import CommandDescription
 from dryparse.objects import Arguments, Command, Meta, Option
 
 __all__ = ("command", "subcommand")
@@ -73,7 +74,19 @@ def command(func: Callable[..., Any]):
     """
     doc = parse(func.__doc__)
 
-    cmd = Command(func.__name__, desc=doc.short_description)
+    cmd = Command(
+        func.__name__,
+        desc=CommandDescription(
+            (
+                doc.short_description
+                + ("\n\n" if doc.long_description else "")
+                if doc.short_description
+                else ""
+            )
+            + (doc.long_description or ""),
+            brief=doc.short_description,
+        ),
+    )
     signature = inspect.signature(func)
 
     params = signature.parameters.values()
@@ -86,17 +99,20 @@ def command(func: Callable[..., Any]):
         next(iter_params)
 
     for param in iter_params:
+        annotation = (
+            param.annotation if param.annotation != Parameter.empty else None
+        )
         if param.kind == Parameter.POSITIONAL_ONLY or (
             param.kind == Parameter.POSITIONAL_OR_KEYWORD
             and param.default == Parameter.empty
         ):
             if not isinstance(param.annotation, type):
                 raise AnnotationMustBeTypeOrSpecialError(param)
-            setattr(cmd, param.name, Arguments(param.annotation))
+            setattr(cmd, param.name, Arguments(annotation or str))
         elif param.kind == Parameter.VAR_POSITIONAL:
             if not isinstance(param.annotation, type):
                 raise AnnotationMustBeTypeOrSpecialError(param)
-            setattr(cmd, param.name, Arguments((param.annotation, ...)))
+            setattr(cmd, param.name, Arguments((annotation or str, ...)))
         elif param.kind == Parameter.KEYWORD_ONLY or (
             param.kind == Parameter.POSITIONAL_OR_KEYWORD
             and param.default != Parameter.empty
@@ -106,6 +122,8 @@ def command(func: Callable[..., Any]):
             setattr(cmd, param.name, _option_from_parameter(param, doc))
         elif param.kind == Parameter.VAR_KEYWORD:
             raise VariadicKwargsNotAllowedError
+
+    _fill_help_based_on_docstring(cmd, doc)
 
     Meta(cmd).call = func
     return cmd
@@ -140,3 +158,17 @@ def _option_from_parameter(param: Parameter, doc: Docstring):
         argtype=annotation,
         desc=doc.short_description,
     )
+
+
+def _fill_help_based_on_docstring(cmd: Command, doc: Docstring):
+    # TODO what about params in docstring that don't exist in function sig?
+    for param in doc.params:
+        name = param.arg_name
+        desc = param.description
+        attr = getattr(cmd, name)
+        if isinstance(attr, Option):
+            if "default" not in desc and attr.value is not None:
+                desc += f" (default: {repr(attr.value)})"
+            attr.help.desc = desc
+        elif isinstance(attr, Arguments):
+            attr.help.desc = desc

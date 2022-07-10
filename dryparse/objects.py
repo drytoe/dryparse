@@ -159,6 +159,8 @@ class Arguments(DryParseType):
     values
         The list of argument values held by this instance. This attribute is
         assigned when you call :meth:`assign`, and will be ``None`` until then.
+    help
+
 
     Notes
     -----
@@ -196,7 +198,7 @@ class Arguments(DryParseType):
     >>> Arguments(int, (int, range(1, 2)), str)
     """
 
-    __slots__ = ("pattern", "values")
+    __slots__ = ("pattern", "values", "help")
 
     _NumberOfArgs = Union[int, _EllipsisType, range]
     _PatternItem = Union[type, Tuple[type, _NumberOfArgs]]
@@ -204,36 +206,47 @@ class Arguments(DryParseType):
     def __init__(
         self,
         *pattern: _PatternItem,
+        name: str = None,
+        desc: Union[str, "CommandDescription"] = None,
     ):
         if not pattern:
             self.pattern = [(str, ...)]
-            return
-        # NOTE: when referring to a flexible pattern, we mean either a
-        # (type, ...)-style or a (type, range)-style pattern
-        flexible_pattern_found = False
-        for item in pattern:
-            if flexible_pattern_found:
-                raise PatternAfterFlexiblePatternError
-            if isinstance(item, tuple):
-                # pylint: disable=no-else-raise
-                if len(item) != 2:
+        else:
+            # NOTE: when referring to a flexible pattern, we mean either a
+            # (type, ...)-style or a (type, range)-style pattern
+            flexible_pattern_found = False
+            for item in pattern:
+                if flexible_pattern_found:
+                    raise PatternAfterFlexiblePatternError
+                if isinstance(item, tuple):
+                    # pylint: disable=no-else-raise
+                    if len(item) != 2:
+                        raise InvalidArgumentPatternError
+                    elif isinstance(item[1], (_EllipsisType, range)):
+                        flexible_pattern_found = True
+                    elif not isinstance(item[0], type) or (
+                        not isinstance(item[1], (_EllipsisType, range))
+                        # A bool is a subclass of int, but we don't allow it
+                        and not (
+                            not isinstance(item[1], bool)
+                            and isinstance(item[1], int)
+                            and item[1] > 0
+                        )
+                    ):
+                        raise InvalidArgumentPatternError
+                elif not isinstance(item, type):
                     raise InvalidArgumentPatternError
-                elif isinstance(item[1], (_EllipsisType, range)):
-                    flexible_pattern_found = True
-                elif not isinstance(item[0], type) or (
-                    not isinstance(item[1], (_EllipsisType, range))
-                    # A bool is a subclass of int, but we don't allow it
-                    and not (
-                        not isinstance(item[1], bool)
-                        and isinstance(item[1], int)
-                        and item[1] > 0
-                    )
-                ):
-                    raise InvalidArgumentPatternError
-            elif not isinstance(item, type):
-                raise InvalidArgumentPatternError
-        self.pattern = pattern
+            self.pattern = pattern
         self.values: Union[list, None] = None
+
+        # pylint: disable-next=import-outside-toplevel
+        from .help import ArgumentsHelp
+
+        self.help = ArgumentsHelp(self)
+        if name is not None:
+            self.help.name = name
+        if desc is not None:
+            self.help.desc = desc
 
     def convert(
         self, args: Sequence[str], allow_extra_args=False
@@ -384,6 +397,10 @@ class Arguments(DryParseType):
             raise TypeError(pattern_item)
 
 
+if typing.TYPE_CHECKING:
+    from dryparse.help import CommandDescription
+
+
 class Command(DryParseType):
     """
     A CLI command.
@@ -399,7 +416,12 @@ class Command(DryParseType):
     >>> docker.run = Command("run", desc="Run a command in a new container")
     """
 
-    def __init__(self, name, regex=None, desc: str = None):
+    def __init__(
+        self,
+        name: str,
+        regex: str = None,
+        desc: Union[str, "CommandDescription"] = None,
+    ):
         meta = Meta(self)
         meta.name = name
         meta.regex = regex or name

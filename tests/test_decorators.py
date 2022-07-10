@@ -1,3 +1,5 @@
+import textwrap
+
 import dryparse
 from dryparse.objects import Option, Arguments, Meta
 
@@ -54,7 +56,7 @@ class TestCommandDecorator:
 
         def func(
             pos1: int,  # Arguments(int)
-            *pos_any: str,  # Arguments((str, ...))
+            *pos_any,  # Arguments((str, ...))
             opt1: bool,  # Option("-o", "--opt", argtype=bool)
             opt2: float = 3,  # Option("--opt", argtype=float, default=3)
             opt_3,  # Option("--opt-3", argtype=str)
@@ -91,15 +93,22 @@ class TestCommandDecorator:
 
     def test_help(self):
         @dryparse.command
-        def cmd(arg1, *args, opt1=None, opt2=None):
+        def cmd(arg1, *args, opt1=None, opt2="Hello"):
             """A test command.
 
-            :param arg1: Argument no. 1.
-            :param args: Remaining arguments.
-            :param opt1: Option no. 1.
-            :param opt2: Option no. 2.
-            """
-            pass
+            Additional description.
 
-        assert str(Meta(cmd).help.desc) == "A test command."
-        # TODO params
+            :param arg1: Argument no. 1
+            :param args: Remaining arguments
+            :param opt1: Option no. 1
+            :param opt2: Option no. 2
+            """
+            _ = arg1, args, opt1, opt2
+
+        meta = Meta(cmd)
+        help = meta.help
+        assert str(help.desc) == "A test command.\n\nAdditional description."
+        assert str(cmd.arg1.help.desc) == "Argument no. 1"
+        assert str(cmd.args.help.desc) == "Remaining arguments"
+        assert str(cmd.opt1.help.desc) == "Option no. 1"
+        assert str(cmd.opt2.help.desc) == "Option no. 2 (default: 'Hello')"

@@ -96,7 +96,7 @@ def verify_function_callable_with_args(func, *args, **kwargs):
 
     Raises
     ------
-    dryparse.errors.CallbackDoesNotSupportAllArgumentsError
+    ~dryparse.errors.CallbackDoesNotSupportAllArgumentsError
         If the verification fails.
     """
     from inspect import Signature  # pylint: disable=import-outside-toplevel

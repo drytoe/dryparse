@@ -3,9 +3,16 @@
 import copy
 import textwrap
 from io import StringIO
-from typing import List, Optional, Union
+from typing import List, Optional, Union, overload
 
-from dryparse.objects import Command, DryParseType, Group, Meta, Option
+from dryparse.objects import (
+    Arguments,
+    Command,
+    DryParseType,
+    Group,
+    Meta,
+    Option,
+)
 from dryparse.util import reassignable_property
 
 __all__ = (
@@ -14,6 +21,7 @@ __all__ = (
     "Help",
     "CommandHelp",
     "OptionHelp",
+    "ArgumentsHelp",
     "GroupHelp",
     "HelpSection",
     "HelpSectionList",
@@ -55,8 +63,10 @@ class DryParseHelpType(DryParseType):  # pylint: disable=too-few-public-methods
 
 class Help(DryParseHelpType, metaclass=_HelpMetaclass):
     """
-    Hierarchical representation of a help message. You can customize every
-    individual part or subpart of it, or its entirety.
+    Hierarchical representation of a help message.
+
+    You can customize every individual part or subpart of it, or its entirety.
+    You will probably not use this class directly, but one of its subclasses.
     """
 
     @reassignable_property
@@ -128,8 +138,7 @@ class CommandHelp(Help, metaclass=_HelpMetaclass):
 
     @reassignable_property
     def sections(self) -> "HelpSectionList":
-        """
-        Sections of this help message.
+        """Sections of this help message.
 
         Default implementation returns a standard command section list
         including "usage", "subcommands", etc.
@@ -194,8 +203,7 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
 
     @reassignable_property
     def signature(self) -> str:
-        """
-        Option signature.
+        """Option signature.
 
         Default value:
 
@@ -268,6 +276,92 @@ class OptionHelp(Help, metaclass=_HelpMetaclass):
     def text(self):
         # pylint: disable=no-member
         return HelpEntry(self.signature, self.desc).text
+
+
+class ArgumentsHelp(Help, metaclass=_HelpMetaclass):
+    """
+    Attributes
+    ----------
+    override_class: Optional[Type[OptionHelp]]
+        When instantiating an object of type :class:`ArgumentHelp`, return an
+        instance of ``override_class`` instead.
+    """
+
+    __slots__ = ("arguments",)
+
+    def __init__(self, arguments: Arguments):
+        self.arguments = arguments
+
+    @reassignable_property
+    def desc(self):  # pylint: disable=no-self-use
+        """Arguments description."""
+        return ""
+
+    desc: str
+
+    @reassignable_property
+    def signature(self) -> str:
+        """Arguments signature.
+
+        Default value: taken from ``name`` parameter to the constructor
+        of :class:`Arguments`. Additional information is appended indicating
+        the acceptable number of arguments.
+
+        Note that the default implementation does not take into account the
+        possibility of heterogeneous argument types - if this is the case, you
+        must override this property.
+        """
+        # pylint: disable=no-member
+
+        # Lower and upper bound to the number of arguments
+        class Inf:
+            """Special type representing infinity"""
+
+        lower_bound = 0
+        upper_bound = 0
+        for pattern in self.arguments.pattern:
+            if isinstance(pattern, type):
+                lower_bound += 1
+                upper_bound += 1
+            elif isinstance(pattern, tuple):
+                num = pattern[1]
+                if isinstance(num, int):
+                    lower_bound += num
+                    upper_bound += num
+                elif isinstance(num, type(...)):
+                    upper_bound = Inf
+                elif isinstance(num, range):
+                    lower_bound += num.start
+                    upper_bound += num.stop
+
+        if (lower_bound, upper_bound) == (1, 1):
+            return self.hint
+        if lower_bound == 0 and upper_bound is Inf:
+            return self.hint + "..."
+        if lower_bound != 0 and upper_bound is Inf:
+            return f"{self.hint}{{{lower_bound}...}}"
+        return f"{self.hint}{{{lower_bound}..{upper_bound}}}"
+
+    signature: str
+
+    @reassignable_property
+    def hint(self) -> str:
+        """
+        Hint for the option that appears in the "usage" section of a command.
+
+        Default value: Same as ``self.signature``.
+        """
+        # pylint: disable=no-self-use,unnecessary-ellipsis
+        raise NotImplementedError
+
+    hint: str
+
+    @reassignable_property
+    def text(self) -> str:
+        # pylint: disable=no-member
+        return HelpEntry(self.signature, self.desc).text
+
+    text: str
 
 
 class GroupHelp(Help, metaclass=_HelpMetaclass):
@@ -438,7 +532,7 @@ class HelpEntry(DryParseHelpType):
 
     __slots__ = ("signature", "desc")
 
-    def __init__(self, signature, desc):
+    def __init__(self, signature: str, desc: Union[str, "CommandDescription"]):
         self.signature = signature
         self.desc = desc
 
@@ -468,12 +562,17 @@ class HelpEntry(DryParseHelpType):
         """Entire help text for this entry."""
         # pylint: disable=no-member
         if self.desc:
-            return self.padded_signature + self.desc
+            return self.padded_signature + (
+                self.desc.long
+                if isinstance(self.desc, CommandDescription)
+                else self.desc
+            )
         return self.signature
 
     text: str
 
 
+# TODO rename to Description
 class CommandDescription:
     """
     Command description that can hold both a long and a brief version.
@@ -485,13 +584,48 @@ class CommandDescription:
     brief: str
         Brief description. Describes this command when it appears as a
         subcommand in another command's help text. Falls back to ``long``.
+
+    Parameters
+    ----------
+    long: str
+        Same as attribute.
+    brief: str
+        Same as attribute.
+    other: CommandDescription
+        Initializes this object from an existing :class:`CommandDescription`
+        object, copying its ``long`` and ``brief`` attributes.
+
+    Raises
+    ------
+    ValueError
+        If both ``other`` and ``brief`` are given.
     """
 
     __slots__ = ("long", "brief")
 
-    def __init__(self, long, brief=None):
-        self.long = long
-        self.brief = brief or long
+    @overload
+    def __init__(self, long: str, brief: str = None):
+        ...
+
+    @overload
+    def __init__(self, other: "CommandDescription"):
+        ...
+
+    def __init__(
+        self,
+        long_or_description: Union[str, "CommandDescription"],
+        brief: str = None,
+    ):
+        if isinstance(long_or_description, CommandDescription):
+            description = long_or_description
+            if brief is not None:
+                raise ValueError("brief")
+            self.long = description.long
+            self.brief = description.brief
+        else:
+            long = long_or_description
+            self.long = long or brief or ""
+            self.brief = brief or long or ""
 
     def __str__(self):
         return self.long
