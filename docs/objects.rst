@@ -84,10 +84,11 @@ Defining positional arguments
 
 .. code:: python
 
-   git.add.args = Arguments([])
+   git.add.args = Arguments((str, ...))
 
-These use cases are simple, but :class:`~dryparse.objects.Arguments` has so much
-more to offer. Take a look at its API documentation.
+These use cases are simple, but we support so many more. Take a look at the API
+documentation of :class:`~dryparse.objects.Arguments`, especially the
+**Examples** section.
 
 Root command
 ============

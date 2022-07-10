@@ -26,11 +26,13 @@ extensions = [
     "sphinx_codeautolink",
     "sphinx.ext.napoleon",
     "sphinx.ext.autosummary",
+    "sphinx.ext.autosectionlabel",
     "sphinx_rtd_dark_mode",
     "sphinx_copybutton",
     "sphinx-prompt",
     "sphinx_tabs.tabs",
     "sphinx_toolbox.source",
+    "sphinx_toolbox.collapse",
 ]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 todo_include_todos = True
@@ -73,7 +75,7 @@ source_link_target = "GitHub"
 # ┏━━━━━━━━━━━━━━━┓
 # ┃ Code autolink ┃
 # ┗━━━━━━━━━━━━━━━┛
-codeautolink_global_preface = "from dryparse.objects import *"
+codeautolink_global_preface = "import dryparse; from dryparse.objects import *"
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 # ┃ Specific steps for ReadTheDocs ┃

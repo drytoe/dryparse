@@ -4,6 +4,18 @@ Contributing
 
 .. toctree::
 
+Programming techniques you should keep in mind
+==============================================
+
+Marking a method as unimplemented but not abstract
+--------------------------------------------------
+
+.. code:: python
+
+   def method(self):
+      ...  # pylint: unnecessary-ellipsis
+      raise NotImplementedError
+
 Documentation
 =============
 
@@ -13,7 +25,7 @@ Documentation
 
    .. prompt:: bash
 
-      shell command here
+      shell commands here
 
 - When adding python code examples, dryparse objects must link to their
   corresponding documentation:
