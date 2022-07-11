@@ -1,56 +1,65 @@
-====================
-``dryparse.objects``
-====================
+# ``dryparse.objects``
 
-.. autolink-preface:: from dryparse.objects import *
+```{autolink-preface}
+from dryparse.objects import *
+```
 
+```{eval-rst}
 .. automodule:: dryparse.objects
+```
 
-.. toctree::
+```{toctree}
+```
 
-``Option``
-==========
+## ``Option``
 
+```{eval-rst}
 .. autoclass:: dryparse.objects.Option
    :members:
+```
 
-``Command``
-===========
+## ``Command``
 
+```{eval-rst}
 .. autoclass:: dryparse.objects.Command
    :members:
    :special-members: __call__
+```
 
-``RootCommand``
-===============
+## ``RootCommand``
 
+```{eval-rst}
 .. autoclass:: dryparse.objects.RootCommand
    :members:
+```
 
-``Group``
-=========
+## ``Group``
 
+```{eval-rst}
 .. autoclass:: dryparse.objects.Group
    :members:
+```
 
-``Arguments``
-=============
+## ``Arguments``
 
+```{eval-rst}
 .. autoclass:: dryparse.objects.Arguments
    :members:
+```
 
-Advanced
-========
+## Advanced
 
-``Meta``
---------
+### ``Meta``
 
+```{eval-rst}
 .. autoclass:: dryparse.objects.Meta
    :members:
+```
 
-``ResolvedCommand``
------------------
+### ``ResolvedCommand``
 
+```{eval-rst}
 .. autoclass:: dryparse.objects.ResolvedCommand
    :members:
+```
 

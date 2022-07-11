@@ -33,6 +33,7 @@ extensions = [
     "sphinx_tabs.tabs",
     "sphinx_toolbox.source",
     "sphinx_toolbox.collapse",
+    "myst_parser",
 ]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 todo_include_todos = True
@@ -64,6 +65,7 @@ napoleon_custom_sections = [
     "Methods",
     "Caveats",
 ]
+highlight_language = "python"
 
 # ┏━━━━━━━━━━━━━━━━┓
 # ┃ Sphinx toolbox ┃
