@@ -4,11 +4,12 @@
 :maxdepth: 2
 :hidden:
 
-getting_started.rst
-objects.rst
-customizing_help.rst
-api/index.rst
-contributing.rst
+getting_started.md
+objects.md
+customizing_help.md
+custom_parsing.md
+api/index.md
+contributing.md
 ```
 
 In a nutshell, dryparse is a CLI parser that makes it easy to turn regular

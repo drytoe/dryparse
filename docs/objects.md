@@ -91,3 +91,28 @@ you can add this option yourself, we provide {class}`~dryparse.objects.RootComma
 ```
 git = RootCommand("git", version="0.1.0", desc="A version control software")
 ```
+
+## The structured way
+
+What we have done so far is simple, easy and succinct, it doesn't cooperate
+well with type hinters and linters -- and that is suboptimal.
+
+```{todo}
+Finish this section
+```
+
+```
+class Docker(RootCommand):
+    cwd = Option("-C", argtype=str)
+    paginate = Option("-p", "--paginate")
+
+    def __init__(self):
+        super().__init__(version="2.35.1")
+    
+    @dryparse.command
+    def run(attach=[]):
+        pass
+        
+    
+```
+
