@@ -1,7 +1,7 @@
 import textwrap
 
 import dryparse
-from dryparse.objects import Option, Arguments, Meta
+from dryparse.objects import Option, Arguments, Meta, Command
 
 
 def create_cp_command():
@@ -19,22 +19,22 @@ class TestCommandDecorator:
     def setup_class(cls):
         cls.manually_created_option = Option("-O", "--Opt4")
 
-    def test_command_creation_empty(self):
+    def test_from_function_empty(self):
         """Command with no arguments or options (except default `help`)."""
 
-        @dryparse.command
+        @dryparse.command.from_function
         def cmd1():
             pass
 
-        @dryparse.command
+        @dryparse.command.from_function
         def cmd2(self):
             _ = self
 
         assert list(cmd1.__dict__.keys()) == ["help"]
         assert list(cmd2.__dict__.keys()) == ["help"]
 
-    def test_command_creation_simple(self):
-        @dryparse.command
+    def test_from_function_simple(self):
+        @dryparse.command.from_function
         def cmd(arg1: str, arg2: int, o: int = None, p: str = "a"):
             _ = arg1, arg2, o, p
 
@@ -51,7 +51,7 @@ class TestCommandDecorator:
             and cmd.p.long == "--p"
         )
 
-    def test_command_creation(self):
+    def test_from_function(self):
         manually_created_option = self.manually_created_option
 
         def func(
@@ -64,7 +64,7 @@ class TestCommandDecorator:
         ):
             _ = pos1, pos_any, opt1, opt2, opt_3, opt4
 
-        cmd = dryparse.command(func)
+        cmd = dryparse.command.from_function(func)
 
         assert isinstance(cmd.pos1, Arguments) and cmd.pos1.pattern == (int,)
         assert isinstance(cmd.pos_any, Arguments) and cmd.pos_any.pattern == (
@@ -90,6 +90,53 @@ class TestCommandDecorator:
             and cmd.opt_3.long == "--opt-3"
         )
         assert cmd.opt4 is manually_created_option
+
+    def test_from_class_that_is_subclass_of_command(self):
+        class cmd(Command):
+            option = Option("-o", "--option")
+            args = Arguments()
+
+            @dryparse.command.from_class
+            class sub0(Command):
+                option1 = Option("-x", "--option1")
+
+            @dryparse.command.from_class
+            class sub1(Command):
+                option2 = Option("-y", "--option2")
+
+                @dryparse.command.from_class
+                class subsub0(Command):
+                    pass
+
+                @dryparse.command.from_class
+                class subsub1(Command):
+                    pass
+
+        Cmd = cmd
+        cmd = dryparse.command.from_class(Cmd)
+
+        assert isinstance(cmd, Cmd)
+
+        # There is a special reason we group these assertions into functions;
+        # but the explanation is too long
+        def assert_level_1():
+            assert (
+                isinstance(cmd.option, Option)
+                and isinstance(cmd.args, Arguments)
+                and isinstance(cmd.sub0, Command)
+                and isinstance(cmd.sub1, Command)
+            )
+
+        def assert_level_2():
+            assert (
+                isinstance(cmd.sub0.option1, Option)
+                and isinstance(cmd.sub1.option2, Option)
+                and isinstance(cmd.sub1.subsub0, Command)
+                and isinstance(cmd.sub1.subsub1, Command)
+            )
+
+        assert_level_1()
+        assert_level_2()
 
     def test_help(self):
         @dryparse.command

@@ -25,7 +25,7 @@ def deepcopy_like_parent(obj: object, memo=None):
     import copy as copy_module  # pylint: disable=import-outside-toplevel
 
     class NonExistent:
-        """Special marker value."""
+        """Special sentinel value."""
 
     cls = obj.__class__
 

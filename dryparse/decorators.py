@@ -2,7 +2,9 @@
 
 import inspect
 from inspect import Parameter
-from typing import Any, Callable
+from symbol import decorator
+from types import FunctionType, ModuleType
+from typing import Any, Callable, Type, TypeVar, Union, overload
 
 from docstring_parser import Docstring
 from docstring_parser.parser import parse
@@ -12,126 +14,208 @@ from dryparse.errors import (
     VariadicKwargsNotAllowedError,
 )
 from dryparse.help import Description
-from dryparse.objects import Arguments, Command, Meta, Option
+from dryparse.objects import Arguments, Command, DryParseType, Meta, Option
 
 __all__ = ("command", "subcommand")
 
+_SubclassOfCommand = TypeVar("_SubclassOfCommand", bound=Command)
 
-def command(func: Callable[..., Any]):
+
+class command:
     """
-    Take a callable and turn it into a :class:`~dryparse.objects.Command`
-    object.
+    Return a :class:`~dryparse.objects.Command` object created from the passed
+    argument.
 
-    Each positional argument will be converted to an
-    :class:`~dryparse.objects.Arguments` object whose
-    :attr:`~dryparse.objects.Arguments.pattern` will be generated using the
-    type annotation.
+    A call to this class will in turn call one of: :any:`from_function`,
+    :any:`from_class` or :any:`from_module` based on the type of the argument.
+    You should read the documentation of whichever one of those is applicable.
 
-    Each keyword argument will be converted to an
-    :class:`~dryparse.objects.Option` object, again using the information from
-    the type annotation. If the annotation is an instance of
-    :class:`~dryparse.objects.Option`, this instance will be used directly.
+    This class should is meant to be used as a decorator.
 
-    **IMPORTANT**: Type annotations must be actual types and not ``Union``,
-    ``Any`` etc. This is required because the type will used to convert CLI
-    arguments into their Python representations. *As a special case*, the
-    annotation for keyword arguments can be an instance of
-    :class:`~dryparse.objects.Option`.
-
-    Notes
-    -----
-    - ``func`` will become the :class:`~dryparse.objects.Meta.call` attribute
-      associated with the :class:`~dryparse.objects.Command` object returned by
-      this decorator. You should read the documentation of
-      :class:`~dryparse.objects.Meta.call`.
-    - If a parameter is neither annotated nor has a default value, its type is
-      assumed to be ``str``.
-    - The text for specifying an option on the command line is derived from the
-      argument name in the following way:
-
-      - The short text is formed by prepending a `-` before the first character
-        of the argument name. Note that
-        if multiple argument names start with the same character, only the
-        first one will get a short text.
-
-        *Example:* ``recursive`` becomes `-r`.
-
-      - The long text is formed by prepending `--` before the argument name,
-        additionally replacing all ``_`` characters with `-`.
-
-        *Example:* ``work_dir`` becomes `--work-dir`.
-
-    Raises
-    ------
-    :class:`~dryparse.errors.AnnotationMustBeTypeOrSpecialError`
-        If a type annotation is not a ``type``, or an instance of
-        :class:`~dryparse.objects.Option`, the latter only being allowed for
-        keyword arguments.
-
-    See Also
-    --------
-    dryparse.objects.Meta.call
+    Parameters
+    ----------
+    obj
+        Object from which to create a :class:`~dryparse.objects.Command`. This
+        can be a function, a subclass of :class:`~dryparse.objects.Command` or
+        a module.
     """
-    doc = parse(func.__doc__)
 
-    cmd = Command(
-        func.__name__,
-        desc=Description(
-            (
-                doc.short_description
-                + ("\n\n" if doc.long_description else "")
-                if doc.short_description
-                else ""
+    _Any = Union[FunctionType, Type[Command], ModuleType]
+
+    def __init__(self, obj: _Any):
+        # pylint: disable=super-init-not-called
+        pass
+
+    def __new__(cls, obj: _Any):
+        if inspect.isfunction(obj):
+            return cls.from_function(obj)
+        if isinstance(obj, Command):
+            return obj
+        if isinstance(obj, type) and issubclass(obj, Command):
+            return cls.from_class(obj)
+        if isinstance(obj, ModuleType):
+            return cls.from_module(obj)
+
+    @classmethod
+    def from_function(cls, func: FunctionType):
+        """
+        Create a :class:`~dryparse.object.Command` object with ``func`` as
+        its callback.
+
+        Each positional argument will be converted to an
+        :class:`~dryparse.objects.Arguments` object whose
+        :attr:`~dryparse.objects.Arguments.pattern` will be generated using the
+        type annotation.
+
+        Each keyword argument will be converted to an
+        :class:`~dryparse.objects.Option` object, again using the information from
+        the type annotation. If the annotation is an instance of
+        :class:`~dryparse.objects.Option`, this instance will be used directly.
+
+        **IMPORTANT**: Type annotations must be actual types and not ``Union``,
+        ``Any`` etc. This is required because the type will used to convert CLI
+        arguments into their Python representations. *As a special case*, the
+        annotation for keyword arguments can be an instance of
+        :class:`~dryparse.objects.Option`.
+
+        Notes
+        -----
+        - ``func`` will become the :class:`~dryparse.objects.Meta.call`
+          attribute associated with the :class:`~dryparse.objects.Command`
+          object returned by this decorator. You should read the documentation
+          of :class:`~dryparse.objects.Meta.call`.
+        - If a parameter is neither annotated nor has a default value, its type
+          is assumed to be ``str``.
+        - The text for specifying an option on the command line is derived from
+          the argument name in the following way:
+
+          - The short text is formed by prepending a `-` before the first
+            character of the argument name. Note that if multiple argument
+            names start with the same character, only the first one will get a
+            short text.
+
+            *Example:* ``recursive`` becomes `-r`.
+
+          - The long text is formed by prepending `--` before the argument
+            name, additionally replacing all ``_`` characters with `-`.
+
+            *Example:* ``work_dir`` becomes `--work-dir`.
+
+        Raises
+        ------
+        :class:`~dryparse.errors.AnnotationMustBeTypeOrSpecialError`
+            If a type annotation is not a ``type``, or an instance of
+            :class:`~dryparse.objects.Option`, the latter only being allowed for
+            keyword arguments.
+
+        See Also
+        --------
+        dryparse.objects.Meta.call
+        """
+        cmd, doc = cls._command_with_copied_docstring(func)
+        signature = inspect.signature(func)
+
+        params = signature.parameters.values()
+        iter_params = iter(params)
+
+        # A first parameter named 'self' is special - do not generate an
+        # Argument/Option from it
+        first_param = next(iter(params), None)
+        if first_param and first_param.name == "self":
+            next(iter_params)
+
+        for param in iter_params:
+            annotation = (
+                param.annotation
+                if param.annotation != Parameter.empty
+                else None
             )
-            + (doc.long_description or ""),
-            brief=doc.short_description,
-        ),
-    )
-    signature = inspect.signature(func)
+            if param.kind == Parameter.POSITIONAL_ONLY or (
+                param.kind == Parameter.POSITIONAL_OR_KEYWORD
+                and param.default == Parameter.empty
+            ):
+                if not isinstance(param.annotation, type):
+                    raise AnnotationMustBeTypeOrSpecialError(param)
+                setattr(cmd, param.name, Arguments(annotation or str))
+            elif param.kind == Parameter.VAR_POSITIONAL:
+                if not isinstance(param.annotation, type):
+                    raise AnnotationMustBeTypeOrSpecialError(param)
+                setattr(cmd, param.name, Arguments((annotation or str, ...)))
+            elif param.kind == Parameter.KEYWORD_ONLY or (
+                param.kind == Parameter.POSITIONAL_OR_KEYWORD
+                and param.default != Parameter.empty
+            ):
+                if not isinstance(param.annotation, (type, Option)):
+                    raise AnnotationMustBeTypeOrSpecialError(param)
+                setattr(cmd, param.name, _option_from_parameter(param, doc))
+            elif param.kind == Parameter.VAR_KEYWORD:
+                raise VariadicKwargsNotAllowedError
 
-    params = signature.parameters.values()
-    iter_params = iter(params)
+        _fill_help_based_on_docstring(cmd, doc)
 
-    # A first parameter named 'self' is special - do not generate an
-    # Argument/Option from it
-    first_param = next(iter(params), None)
-    if first_param and first_param.name == "self":
-        next(iter_params)
+        Meta(cmd).call = func
+        return cmd
 
-    for param in iter_params:
-        annotation = (
-            param.annotation if param.annotation != Parameter.empty else None
+    """
+    @classmethod
+    @overload
+    def from_class(
+        cls, class_: Type[_SubclassOfCommand]
+    ) -> _SubclassOfCommand:
+        ...
+    """
+
+    @classmethod
+    def from_class(cls, class_: Type[Command]):
+        """
+        Create a :class:`~dryparse.objects.Command` by intantiating ``class_``.
+
+        While creating the command, ``class_``'s docstring will be used to
+        populate the help message of the created command. The command's name
+        will match ``class_.__name__``.
+        """
+        cmd, doc = cls._command_with_copied_docstring(class_)
+        if issubclass(class_, Command):
+            return cmd
+        for name in dir(class_):
+            if name.startswith("_"):
+                continue
+            attr = getattr(class_, name)
+            if isinstance(attr, DryParseType):
+                continue
+            if isinstance(attr, (FunctionType, type, ModuleType)):
+                setattr(cmd, name, cls(attr))
+        return cmd
+
+    @classmethod
+    def from_module(cls, mod: ModuleType):
+        """TODO"""
+        pass
+
+    @classmethod
+    def _command_with_copied_docstring(cls, obj: _Any):
+        doc = parse(obj.__doc__)
+        class_ = (
+            obj
+            if isinstance(obj, type) and issubclass(obj, Command)
+            else Command
         )
-        if param.kind == Parameter.POSITIONAL_ONLY or (
-            param.kind == Parameter.POSITIONAL_OR_KEYWORD
-            and param.default == Parameter.empty
-        ):
-            if not isinstance(param.annotation, type):
-                raise AnnotationMustBeTypeOrSpecialError(param)
-            setattr(cmd, param.name, Arguments(annotation or str))
-        elif param.kind == Parameter.VAR_POSITIONAL:
-            if not isinstance(param.annotation, type):
-                raise AnnotationMustBeTypeOrSpecialError(param)
-            setattr(cmd, param.name, Arguments((annotation or str, ...)))
-        elif param.kind == Parameter.KEYWORD_ONLY or (
-            param.kind == Parameter.POSITIONAL_OR_KEYWORD
-            and param.default != Parameter.empty
-        ):
-            if not isinstance(param.annotation, (type, Option)):
-                raise AnnotationMustBeTypeOrSpecialError(param)
-            setattr(cmd, param.name, _option_from_parameter(param, doc))
-        elif param.kind == Parameter.VAR_KEYWORD:
-            raise VariadicKwargsNotAllowedError
 
-    _fill_help_based_on_docstring(cmd, doc)
+        cmd = class_(
+            obj.__name__,
+            desc=Description(
+                (
+                    doc.short_description
+                    + ("\n\n" if doc.long_description else "")
+                    if doc.short_description
+                    else ""
+                )
+                + (doc.long_description or ""),
+                brief=doc.short_description,
+            ),
+        )
 
-    Meta(cmd).call = func
-    return cmd
-
-
-def subcommand(func: Callable[[Command], Any]):
-    """Decorator used to register a subcommand inside a class's context."""
-    _ = func  # TODO
+        return cmd, doc
 
 
 def _get_annotation(parameter: Parameter):
