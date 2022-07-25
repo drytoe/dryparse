@@ -24,7 +24,7 @@ The simplest way to create a command is:
 ```
 
 ```
-git = Command("git", desc="A version control software")
+git = Command("git", desc="The stupid content tracker")
 ```
 
 Adding options is super easy:

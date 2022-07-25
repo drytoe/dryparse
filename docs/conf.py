@@ -1,6 +1,7 @@
 import glob
 import os
 import sys
+import dryparse
 
 from sphinx.application import Sphinx
 from sphinx.domains import std
@@ -13,7 +14,6 @@ copyright = "2021, Haris Gušić"
 author = "Haris Gušić"
 
 sys.path.insert(0, os.path.dirname(__file__) + "/..")
-import dryparse
 
 release = dryparse.__version__
 

@@ -12,6 +12,73 @@ api/index.md
 contributing.md
 ```
 
+`````{tabs}
+   ````{tab} Simple
+      ```
+      @dryparse.command
+      def stat(*files: ExistingFile, format: str = None, terse=False):
+          """Display file or file system status.
+
+          :param files: files whose info we want to know
+          :param format: use the specified FORMAT instead of the default
+          :param terse: print the information in terse form
+          """
+          ...
+      ```
+      <div style="display: flex; justify-content: center">
+         <div>=</div>
+      </div>
+   ````
+   ````{tab} Intuitive
+      ```{todo} untested
+      ```
+      ```{literalinclude} examples/intuitive.py
+      :lines: 3-
+      :language: python
+      ```
+   ````
+   ````{tab} Elegant
+      ```{todo} untested
+      ```
+      ```
+      @dryparse.command
+      class docker(RootCommand):
+          """A self-sufficient runtime for containers.
+
+          :attr config: Location of client config files
+          :attr debug: Enable debug mode
+          ...
+          """
+          config = Option("--config", argtype=str)
+          debug = Option("-D", "--debug")
+
+          @dryparse.command
+          class build:
+              """Start a build
+
+              :attr tag: Name and optionally a tag (format: name:tag)
+              """
+              tag = Option("-t", "--tag")
+
+          @dryparse.command
+          class run:
+              """Run a command in a new container
+
+              :attr name: Assign a name to the container
+              ...
+              """
+              name = Option("--name", argtype=str)
+              ...
+
+          ...
+      ```
+   ````
+   ````{tab} Extensible
+   # Remove the help option from `git`
+   del git.help
+   ````
+`````
+
 In a nutshell, dryparse is a CLI parser that makes it easy to turn regular
 functions and objects into command line commands and options. It works out of
 the box, with default behaviors that follow established practices. In addition,
