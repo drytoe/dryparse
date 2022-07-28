@@ -6,6 +6,7 @@ from typing import Sequence
 
 # pylint: disable=missing-class-docstring
 
+
 class DryParseError(Exception):
     """Base class for all dryparse exceptions."""
 
@@ -22,6 +23,7 @@ class NoMatchingOptionError(DryParseError):
 
 class OptionRequiresArgumentError(DryParseError):
     """Option requires an argument."""
+
     def __init__(self, option: str = None):
         self.option = option
         super().__init__()
@@ -56,12 +58,15 @@ class InvalidArgumentPatternError(DryParseError):
     """
 
     def __init__(self):
-        super().__init__("The given pattern can't be used to construct an "
-                         "`Arguments` object")
+        super().__init__(
+            "The given pattern can't be used to construct an "
+            "`Arguments` object"
+        )
 
 
 class PatternAfterFlexiblePatternError(DryParseError):
     """Flexible pattern (e.g. ``(str, ...)``) is not the last pattern."""
+
     def __init__(self):
         super().__init__(
             "There can be no argument patterns after a (type, ...)-style or "
@@ -76,18 +81,18 @@ class ArgumentConversionError(DryParseError):
     """
 
     def __init__(
-            self,
-            reason: str = None,
-            arguments: Sequence[str] = None,
-            index: int = None,
+        self,
+        reason: str = None,
+        arguments: Sequence[str] = None,
+        index: int = None,
     ):
         msg = "Arguments do not conform to the defined argument pattern"
         if reason:
             msg += "\n  Reason: " + reason
         if arguments:
             msg += (
-                    f"\n  Argument{'s' if len(arguments) > 1 else ''}: "
-                    + ", ".join(map(str, arguments))
+                f"\n  Argument{'s' if len(arguments) > 1 else ''}: "
+                + ", ".join(map(str, arguments))
             )
         if index:
             msg += f"\n  Index: {index}"
@@ -128,25 +133,31 @@ class NotEnoughPositionalArgumentsError(DryParseError):
     Not enough positional arguments for the given
     :class:`~dryparse.objects.Arguments` object.
     """
+
     def __init__(self):
-        super().__init__("Not enough positional arguments for the given "
-                         "`Arguments` object")
+        super().__init__(
+            "Not enough positional arguments for the given "
+            "`Arguments` object"
+        )
 
 
 class TooManyPositionalArgumentsError(DryParseError):
     """Too many positional arguments."""
+
     def __init__(self):
         super().__init__(TooManyPositionalArgumentsError.__doc__[:-1])
 
 
 class ReadOnlyAttributeError(DryParseError):
     """Attribute is read-only."""
+
     def __init__(self, name: str):
         super().__init__(f"Attribute is read-only: {name}")
 
 
 class AnnotationMustBeTypeOrSpecialError(DryParseError):
     """Annotation must be a type or a special value."""
+
     def __init__(self, param: Parameter):
         msg = AnnotationMustBeTypeOrSpecialError.__doc__[:-1]
         if param.name:
@@ -158,5 +169,6 @@ class AnnotationMustBeTypeOrSpecialError(DryParseError):
 
 class SelfNotFirstArgumentError(DryParseError):
     """If callback has a self argument, it must be the first."""
+
     def __init__(self):
         super().__init__(SelfNotFirstArgumentError.__doc__[:-1])
