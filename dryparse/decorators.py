@@ -2,9 +2,8 @@
 
 import inspect
 from inspect import Parameter
-from symbol import decorator
 from types import FunctionType, ModuleType
-from typing import Any, Callable, Type, TypeVar, Union, overload
+from typing import Type, TypeVar, Union
 
 from docstring_parser import Docstring
 from docstring_parser.parser import parse
@@ -16,7 +15,7 @@ from dryparse.errors import (
 from dryparse.help import Description
 from dryparse.objects import Arguments, Command, DryParseType, Meta, Option
 
-__all__ = ("command", "subcommand")
+__all__ = ("command",)
 
 _SubclassOfCommand = TypeVar("_SubclassOfCommand", bound=Command)
 
@@ -44,6 +43,7 @@ class command:
 
     def __init__(self, obj: _Any):
         # pylint: disable=super-init-not-called
+        # NOTE: this function exists only to satisfy static analyzers
         pass
 
     def __new__(cls, obj: _Any):
